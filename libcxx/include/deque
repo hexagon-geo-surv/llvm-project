@@ -189,6 +189,7 @@ template <class T, class Allocator, class Predicate>
 #include <__algorithm/remove_if.h>
 #include <__algorithm/unwrap_iter.h>
 #include <__assert>
+#include <__concepts/same_as.h>
 #include <__config>
 #include <__debug_utils/sanitizers.h>
 #include <__format/enable_insertable.h>
@@ -376,7 +377,6 @@ public:
     return __x.__ptr_ == __y.__ptr_;
   }
 
-#if _LIBCPP_STD_VER <= 17
   _LIBCPP_HIDE_FROM_ABI friend bool operator!=(const __deque_iterator& __x, const __deque_iterator& __y) {
     return !(__x == __y);
   }
@@ -396,8 +396,14 @@ public:
   _LIBCPP_HIDE_FROM_ABI friend bool operator>=(const __deque_iterator& __x, const __deque_iterator& __y) {
     return !(__x < __y);
   }
-#else  // _LIBCPP_STD_VER <= 17
-  _LIBCPP_HIDE_FROM_ABI friend strong_ordering operator<=>(const __deque_iterator& __x, const __deque_iterator& __y) {
+
+#if _LIBCPP_STD_VER >= 20
+  //  template <class _Tp = void>
+  _LIBCPP_HIDE_FROM_ABI friend strong_ordering operator<=>(const __deque_iterator& __x, const __deque_iterator& __y)
+    requires requires(const pointer& __i) {
+      { __i <=> __i } -> same_as<strong_ordering>;
+    }
+  {
     if (__x.__m_iter_ < __y.__m_iter_)
       return strong_ordering::less;
 
@@ -406,7 +412,7 @@ public:
 
     return strong_ordering::greater;
   }
-#endif // _LIBCPP_STD_VER <= 17
+#endif // _LIBCPP_STD_VER >= 20
 
 private:
   _LIBCPP_HIDE_FROM_ABI explicit __deque_iterator(__map_iterator __m, pointer __p) _NOEXCEPT
