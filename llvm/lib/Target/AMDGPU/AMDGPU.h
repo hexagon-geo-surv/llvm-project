@@ -65,6 +65,7 @@ ModulePass *createAMDGPULowerBufferFatPointersPass();
 FunctionPass *createSIModeRegisterPass();
 FunctionPass *createGCNPreRAOptimizationsLegacyPass();
 FunctionPass *createAMDGPUPreloadKernArgPrologLegacyPass();
+ModulePass *createAMDGPUPreloadKernelArgumentsLegacyPass(const TargetMachine *);
 
 struct AMDGPUSimplifyLibCallsPass : PassInfoMixin<AMDGPUSimplifyLibCallsPass> {
   AMDGPUSimplifyLibCallsPass() {}
@@ -231,6 +232,9 @@ extern char &GCNRegPressurePrinterID;
 void initializeAMDGPUPreloadKernArgPrologLegacyPass(PassRegistry &);
 extern char &AMDGPUPreloadKernArgPrologLegacyID;
 
+void initializeAMDGPUPreloadKernelArgumentsLegacyPass(PassRegistry &);
+extern char &AMDGPUPreloadKernelArgumentsLegacyID;
+
 // Passes common to R600 and SI
 FunctionPass *createAMDGPUPromoteAlloca();
 void initializeAMDGPUPromoteAllocaPass(PassRegistry&);
@@ -339,6 +343,17 @@ private:
 public:
   AMDGPUAttributorPass(TargetMachine &TM, AMDGPUAttributorOptions Options = {})
       : TM(TM), Options(Options) {};
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+};
+
+class AMDGPUPreloadKernelArgumentsPass
+    : public PassInfoMixin<AMDGPUPreloadKernelArgumentsPass> {
+  const AMDGPUTargetMachine &TM;
+
+public:
+  explicit AMDGPUPreloadKernelArgumentsPass(const AMDGPUTargetMachine &TM)
+      : TM(TM) {}
+
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
