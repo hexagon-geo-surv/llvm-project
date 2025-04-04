@@ -4351,7 +4351,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *SizeVal = EmitScalarExpr(E->getArg(1));
     EmitNonNullArgCheck(Dest, E->getArg(0)->getType(),
                         E->getArg(0)->getExprLoc(), FD, 0);
-    Builder.CreateMemSet(Dest, Builder.getInt8(0), SizeVal, false);
+    auto *I = Builder.CreateMemSet(Dest, Builder.getInt8(0), SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(nullptr);
   }
 
@@ -4366,7 +4367,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     EmitNonNullArgCheck(RValue::get(Dest.emitRawPointer(*this)),
                         E->getArg(1)->getType(), E->getArg(1)->getExprLoc(), FD,
                         0);
-    Builder.CreateMemMove(Dest, Src, SizeVal, false);
+    auto *I = Builder.CreateMemMove(Dest, Src, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(nullptr);
   }
 
@@ -4379,7 +4381,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
     EmitArgCheck(TCK_Store, Dest, E->getArg(0), 0);
     EmitArgCheck(TCK_Load, Src, E->getArg(1), 1);
-    Builder.CreateMemCpy(Dest, Src, SizeVal, false);
+    auto *I = Builder.CreateMemCpy(Dest, Src, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     if (BuiltinID == Builtin::BImempcpy ||
         BuiltinID == Builtin::BI__builtin_mempcpy)
       return RValue::get(Builder.CreateInBoundsGEP(
@@ -4395,7 +4398,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         E->getArg(2)->EvaluateKnownConstInt(getContext()).getZExtValue();
     EmitArgCheck(TCK_Store, Dest, E->getArg(0), 0);
     EmitArgCheck(TCK_Load, Src, E->getArg(1), 1);
-    Builder.CreateMemCpyInline(Dest, Src, Size);
+    auto *I = Builder.CreateMemCpyInline(Dest, Src, Size);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(nullptr);
   }
 
@@ -4416,7 +4420,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
-    Builder.CreateMemCpy(Dest, Src, SizeVal, false);
+    auto *I = Builder.CreateMemCpy(Dest, Src, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(Dest, *this);
   }
 
@@ -4442,7 +4447,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
-    Builder.CreateMemMove(Dest, Src, SizeVal, false);
+    auto *I = Builder.CreateMemMove(Dest, Src, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(Dest, *this);
   }
 
@@ -4454,7 +4460,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
     EmitArgCheck(TCK_Store, Dest, E->getArg(0), 0);
     EmitArgCheck(TCK_Load, Src, E->getArg(1), 1);
-    Builder.CreateMemMove(Dest, Src, SizeVal, false);
+    auto *I = Builder.CreateMemMove(Dest, Src, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(Dest, *this);
   }
   case Builtin::BImemset:
@@ -4465,7 +4472,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
     EmitNonNullArgCheck(Dest, E->getArg(0)->getType(),
                         E->getArg(0)->getExprLoc(), FD, 0);
-    Builder.CreateMemSet(Dest, ByteVal, SizeVal, false);
+    auto *I = Builder.CreateMemSet(Dest, ByteVal, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(Dest, *this);
   }
   case Builtin::BI__builtin_memset_inline: {
@@ -4477,7 +4485,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     EmitNonNullArgCheck(RValue::get(Dest.emitRawPointer(*this)),
                         E->getArg(0)->getType(), E->getArg(0)->getExprLoc(), FD,
                         0);
-    Builder.CreateMemSetInline(Dest, ByteVal, Size);
+    auto *I = Builder.CreateMemSetInline(Dest, ByteVal, Size);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(nullptr);
   }
   case Builtin::BI__builtin___memset_chk: {
@@ -4494,7 +4503,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *ByteVal = Builder.CreateTrunc(EmitScalarExpr(E->getArg(1)),
                                          Builder.getInt8Ty());
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
-    Builder.CreateMemSet(Dest, ByteVal, SizeVal, false);
+    auto *I = Builder.CreateMemSet(Dest, ByteVal, SizeVal, false);
+    addInstToNewSourceAtom(I, nullptr);
     return RValue::get(Dest, *this);
   }
   case Builtin::BI__builtin_wmemchr: {
