@@ -11,8 +11,8 @@ declare <2 x i16> @llvm.smin.v2i16(<2 x i16>, <2 x i16>)
 define i16 @max_min(i16 %x) {
 ; CHECK-LABEL: define i16 @max_min(
 ; CHECK-SAME: i16 [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN:%.*]] = call i16 @llvm.smin.i16(i16 [[X]], i16 255)
-; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smax.i16(i16 [[MIN]], i16 -1)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[X]], i16 -1)
+; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smin.i16(i16 [[TMP1]], i16 255)
 ; CHECK-NEXT:    ret i16 [[MAX]]
 ;
   %min = call i16 @llvm.smin.i16(i16 %x, i16 255)
@@ -23,8 +23,8 @@ define i16 @max_min(i16 %x) {
 define i16 @max_min_commute0(i16 %x) {
 ; CHECK-LABEL: define i16 @max_min_commute0(
 ; CHECK-SAME: i16 [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN:%.*]] = call i16 @llvm.smin.i16(i16 [[X]], i16 127)
-; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smax.i16(i16 [[MIN]], i16 -128)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[X]], i16 -128)
+; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smin.i16(i16 [[TMP1]], i16 127)
 ; CHECK-NEXT:    ret i16 [[MAX]]
 ;
   %min = call i16 @llvm.smin.i16(i16 %x, i16 127)
@@ -35,8 +35,8 @@ define i16 @max_min_commute0(i16 %x) {
 define i16 @max_min_commute1(i16 %x) {
 ; CHECK-LABEL: define i16 @max_min_commute1(
 ; CHECK-SAME: i16 [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN:%.*]] = call i16 @llvm.smin.i16(i16 [[X]], i16 127)
-; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smax.i16(i16 [[MIN]], i16 -128)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[X]], i16 -128)
+; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smin.i16(i16 [[TMP1]], i16 127)
 ; CHECK-NEXT:    ret i16 [[MAX]]
 ;
   %min = call i16 @llvm.smin.i16(i16 127, i16 %x)
@@ -47,8 +47,8 @@ define i16 @max_min_commute1(i16 %x) {
 define i16 @max_min_commute2(i16 %x) {
 ; CHECK-LABEL: define i16 @max_min_commute2(
 ; CHECK-SAME: i16 [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN:%.*]] = call i16 @llvm.smin.i16(i16 [[X]], i16 127)
-; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smax.i16(i16 [[MIN]], i16 -128)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[X]], i16 -128)
+; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smin.i16(i16 [[TMP1]], i16 127)
 ; CHECK-NEXT:    ret i16 [[MAX]]
 ;
   %min = call i16 @llvm.smin.i16(i16 %x, i16 127)
@@ -59,8 +59,8 @@ define i16 @max_min_commute2(i16 %x) {
 define i16 @max_min_commute3(i16 %x) {
 ; CHECK-LABEL: define i16 @max_min_commute3(
 ; CHECK-SAME: i16 [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN:%.*]] = call i16 @llvm.smin.i16(i16 [[X]], i16 127)
-; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smax.i16(i16 [[MIN]], i16 -128)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[X]], i16 -128)
+; CHECK-NEXT:    [[MAX:%.*]] = call i16 @llvm.smin.i16(i16 [[TMP1]], i16 127)
 ; CHECK-NEXT:    ret i16 [[MAX]]
 ;
   %min = call i16 @llvm.smin.i16(i16 %x, i16 127)
@@ -71,8 +71,8 @@ define i16 @max_min_commute3(i16 %x) {
 define <2 x i16> @max_min_v2i16(<2 x i16> %x) {
 ; CHECK-LABEL: define <2 x i16> @max_min_v2i16(
 ; CHECK-SAME: <2 x i16> [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN:%.*]] = call <2 x i16> @llvm.smin.v2i16(<2 x i16> [[X]], <2 x i16> splat (i16 127))
-; CHECK-NEXT:    [[MAX:%.*]] = call <2 x i16> @llvm.smax.v2i16(<2 x i16> [[MIN]], <2 x i16> splat (i16 -128))
+; CHECK-NEXT:    [[TMP1:%.*]] = call <2 x i16> @llvm.smax.v2i16(<2 x i16> [[X]], <2 x i16> splat (i16 -128))
+; CHECK-NEXT:    [[MAX:%.*]] = call <2 x i16> @llvm.smin.v2i16(<2 x i16> [[TMP1]], <2 x i16> splat (i16 127))
 ; CHECK-NEXT:    ret <2 x i16> [[MAX]]
 ;
   %min = call <2 x i16> @llvm.smin.v2i16(<2 x i16> %x, <2 x i16> splat (i16 127))
@@ -135,8 +135,7 @@ define i16 @max_min_i16_limits(i16 %x) {
 define i16 @min_max_min_nested(i16 %x) {
 ; CHECK-LABEL: define i16 @min_max_min_nested(
 ; CHECK-SAME: i16 [[X:%.*]]) {
-; CHECK-NEXT:    [[MIN1:%.*]] = call i16 @llvm.smin.i16(i16 [[X]], i16 255)
-; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[MIN1]], i16 -128)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i16 @llvm.smax.i16(i16 [[X]], i16 -128)
 ; CHECK-NEXT:    [[MIN2:%.*]] = call i16 @llvm.smin.i16(i16 [[TMP1]], i16 127)
 ; CHECK-NEXT:    ret i16 [[MIN2]]
 ;

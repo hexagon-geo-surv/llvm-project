@@ -216,8 +216,8 @@ define i32 @smax_smin(i32 %x) {
 
 define i32 @smin_smax(i32 %x) {
 ; CHECK-LABEL: @smin_smax(
-; CHECK-NEXT:    [[TMP1:%.*]] = icmp sgt i32 [[X:%.*]], -2
-; CHECK-NEXT:    [[S:%.*]] = select i1 [[TMP1]], i32 -1, i32 -2
+; CHECK-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[X:%.*]], -1
+; CHECK-NEXT:    [[S:%.*]] = select i1 [[TMP1]], i32 -2, i32 -1
 ; CHECK-NEXT:    ret i32 [[S]]
 ;
   %m = call i32 @llvm.smin.i32(i32 %x, i32 -1)
