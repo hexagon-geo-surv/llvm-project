@@ -4392,6 +4392,12 @@ void Verifier::visitAllocaInst(AllocaInst &AI) {
     verifySwiftErrorValue(&AI);
   }
 
+  if (TT.isAMDGPU()) {
+    Check(AI.getAddressSpace() == DL.getAllocaAddrSpace() ||
+              AI.getAddressSpace() == 0,
+          "alloca on amdgpu must be in addrspace(0) or addrspace(5)", &AI);
+  }
+
   visitInstruction(AI);
 }
 
