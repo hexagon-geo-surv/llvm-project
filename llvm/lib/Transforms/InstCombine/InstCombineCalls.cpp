@@ -1927,33 +1927,18 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     // Canonicalize smax(smin(X, MinC), MaxC) to smin(smax(X, MaxC), MinC)
     // if MinC s>= MaxC.
     if (IID == Intrinsic::smax) {
-      Constant *MinC, *MaxC;
-      if (match(I0, m_OneUse(m_Intrinsic<Intrinsic::smin>(
-                        m_Value(X), m_ImmConstant(MinC)))) &&
-          match(I1, m_ImmConstant(MaxC))) {
+      const APInt *MinC, *MaxC;
+      if (match(I0, m_OneUse(m_Intrinsic<Intrinsic::smin>(m_Value(X),
+                                                          m_APInt(MinC)))) &&
+          match(I1, m_APInt(MaxC))) {
 
-        bool MinSgeMax = false;
-
-        ConstantInt *MinCI = dyn_cast<ConstantInt>(MinC);
-        ConstantInt *MaxCI = dyn_cast<ConstantInt>(MaxC);
-        if (MinCI && MaxCI && MinCI->getValue().sge(MaxCI->getValue())) {
-          MinSgeMax = true;
-        } else if (MinC->getType()->isVectorTy()) {
-          ConstantInt *MinSplat =
-              dyn_cast_or_null<ConstantInt>(MinC->getSplatValue());
-          ConstantInt *MaxSplat =
-              dyn_cast_or_null<ConstantInt>(MaxC->getSplatValue());
-          if (MinSplat && MaxSplat &&
-              MinSplat->getValue().sge(MaxSplat->getValue())) {
-            MinSgeMax = true;
-          }
-        }
-
-        if (MinSgeMax) {
-          Value *NewSMax =
-              Builder.CreateBinaryIntrinsic(Intrinsic::smax, X, MaxC);
-          return replaceInstUsesWith(*II, Builder.CreateBinaryIntrinsic(
-                                              Intrinsic::smin, NewSMax, MinC));
+        if (MinC->sgt(*MaxC)) {
+          Value *NewSMax = Builder.CreateBinaryIntrinsic(
+              Intrinsic::smax, X, ConstantInt::get(X->getType(), *MaxC));
+          return replaceInstUsesWith(
+              *II, Builder.CreateBinaryIntrinsic(
+                       Intrinsic::smin, NewSMax,
+                       ConstantInt::get(X->getType(), *MinC)));
         }
       }
     }
