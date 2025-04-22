@@ -3,11 +3,6 @@
 
 ; smax(smin(X, MinC), MaxC) -> smin(smax(X, MaxC), MinC)
 
-declare i16 @llvm.smax.i16(i16, i16)
-declare i16 @llvm.smin.i16(i16, i16)
-declare <2 x i16> @llvm.smax.v2i16(<2 x i16>, <2 x i16>)
-declare <2 x i16> @llvm.smin.v2i16(<2 x i16>, <2 x i16>)
-
 define i16 @max_min(i16 %x) {
 ; CHECK-LABEL: define i16 @max_min(
 ; CHECK-SAME: i16 [[X:%.*]]) {
@@ -180,9 +175,6 @@ define i16 @min_max(i16 %x) {
   %min = call i16 @llvm.smin.i16(i16 %max, i16 127)
   ret i16 %min
 }
-
-declare i16 @llvm.umin.i16(i16, i16)
-declare i16 @llvm.umax.i16(i16, i16)
 
 define i16 @umax_umin(i16 %x) {
 ; CHECK-LABEL: define i16 @umax_umin(
