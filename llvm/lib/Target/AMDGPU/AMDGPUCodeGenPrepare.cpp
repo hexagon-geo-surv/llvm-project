@@ -330,6 +330,9 @@ public:
   bool visitBitreverseIntrinsicInst(IntrinsicInst &I);
   bool visitMinNum(IntrinsicInst &I);
   bool visitSqrt(IntrinsicInst &I);
+
+  bool visitAllocaInst(AllocaInst &I);
+
   bool run();
 };
 
@@ -2352,6 +2355,23 @@ bool AMDGPUCodeGenPrepareImpl::visitSqrt(IntrinsicInst &Sqrt) {
   NewSqrt->takeName(&Sqrt);
   Sqrt.replaceAllUsesWith(NewSqrt);
   Sqrt.eraseFromParent();
+  return true;
+}
+
+// Rewrite alloca with AS0 to alloca with AS5 followed by a addrspace cast.
+bool AMDGPUCodeGenPrepareImpl::visitAllocaInst(AllocaInst &I) {
+  if (I.getAddressSpace() == DL.getAllocaAddrSpace())
+    return false;
+  assert(I.getAddressSpace() == 0 && "An alloca can't be in random AS");
+  IRBuilder<> Builder(&I);
+  AllocaInst *NewAI = Builder.CreateAlloca(
+      I.getAllocatedType(), DL.getAllocaAddrSpace(), I.getArraySize());
+  NewAI->takeName(&I);
+  NewAI->copyMetadata(I);
+  Value *CastI = Builder.CreateAddrSpaceCast(NewAI, I.getType(),
+                                             NewAI->getName() + ".cast");
+  I.replaceAllUsesWith(CastI);
+  I.eraseFromParent();
   return true;
 }
 
