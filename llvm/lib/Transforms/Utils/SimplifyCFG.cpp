@@ -1190,7 +1190,7 @@ static void cloneInstructionsIntoPredecessorBlockAndUpdateSSAUses(
 
   // Key Instructions: We may have propagated atom info into the pred. If the
   // pred's terminator already has atom info do nothing as merging would drop
-  // one atom group anyway. If it doesn't, propagte the remapped atom group
+  // one atom group anyway. If it doesn't, propagate the remapped atom group
   // from BB's terminator.
   if (auto &PredDL = PTI->getDebugLoc()) {
     auto &DL = BB->getTerminator()->getDebugLoc();
