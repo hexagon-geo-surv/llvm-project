@@ -43,4 +43,4 @@ void a() {
 // CHECK: [[G3R1]] = !DILocation({{.*}}, atomGroup: 3, atomRank: 1)
 // CHECK: [[G4R1]] = !DILocation({{.*}}, atomGroup: 4, atomRank: 1)
 // CHECK: [[G5R1]] = !DILocation({{.*}}, atomGroup: 5, atomRank: 1)
-// CHECK: [[RET:!.*]] = !DILocation({{.*}}, atomGroup: [[#]], atomRank: [[#]])
+// CHECK: [[RET]] = !DILocation({{.*}}, atomGroup: [[#]], atomRank: [[#]])
