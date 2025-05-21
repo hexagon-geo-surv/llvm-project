@@ -1506,7 +1506,7 @@ CodeGenFunction::EmitCXXForRangeStmt(const CXXForRangeStmt &S,
     ConvergenceTokenStack.pop_back();
 
   // We want the for closing brace to be step-able on to match existing
-  // behaviour. 
+  // behaviour.
   addInstToNewSourceAtom(ForBody->getTerminator(), nullptr);
 }
 
