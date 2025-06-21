@@ -3025,7 +3025,7 @@ static Value *simplifyICmpWithConstant(CmpPredicate Pred, Value *LHS,
         *MulC != 0 && C->srem(*MulC) != 0)))
     return ConstantInt::get(ITy, Pred == ICmpInst::ICMP_NE);
 
-  if (ICmpInst::isGE(Pred) && C->isOne() && isKnownNonZero(LHS, Q))
+  if (Pred == ICmpInst::ICMP_UGE && C->isOne() && isKnownNonZero(LHS, Q))
     return ConstantInt::getTrue(ITy);
 
   return nullptr;

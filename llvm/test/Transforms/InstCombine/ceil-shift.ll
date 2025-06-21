@@ -295,12 +295,12 @@ define i32 @ceil_shift_should_infer_ge_zero(i32 %x) {
   br i1 %cond, label %if.then, label %if.else
 
 if.then:
-  %12 = lshr i32 %x, 20
-  %13 = and i32 %x, 1048575
-  %14 = icmp ne i32 %13, 0
-  %15 = zext i1 %14 to i32
-  %16 = add nuw nsw i32 %12, %15
-  %max = call i32 @llvm.umax.i32(i32 %16, i32 1)
+  %quot = lshr i32 %x, 20
+  %rem = and i32 %x, 1048575
+  %has_rem = icmp ne i32 %rem, 0
+  %zext_has_rem = zext i1 %has_rem to i32
+  %ceil = add nuw nsw i32 %quot, %zext_has_rem
+  %max = call i32 @llvm.umax.i32(i32 %ceil, i32 1)
   ret i32 %max
 
 if.else:
