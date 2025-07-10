@@ -312,6 +312,7 @@ public:
 
   PreservedAnalyses run(MachineFunction &MF,
                         MachineFunctionAnalysisManager &MFAM);
+  static bool isRequired() { return true; }
 };
 
 class AMDGPUDAGToDAGISelLegacy : public SelectionDAGISelLegacy {
