@@ -193,6 +193,10 @@ static cl::opt<std::string>
 static cl::opt<std::string> FSRemappingFile(
     "fs-remapping-file", cl::init(""), cl::value_desc("filename"),
     cl::desc("Flow Sensitive profile remapping file name."), cl::Hidden);
+// Specify MemoryProfile file name.
+cl::opt<std::string> MemoryProfileFile(
+    "memory-profile-file", cl::init(""), cl::value_desc("filename"),
+    cl::desc("The file path to the memory profile"), cl::Hidden);
 
 // Temporary option to allow experimenting with MachineScheduler as a post-RA
 // scheduler. Targets can "properly" enable this with
@@ -356,6 +360,18 @@ static std::string getFSRemappingFile(const TargetMachine *TM) {
   if (PGOOpt == std::nullopt || PGOOpt->Action != PGOOptions::SampleUse)
     return std::string();
   return PGOOpt->ProfileRemappingFile;
+}
+
+// Find the MemoryProfile file name. The internal option takes the precedence
+// before getting from TargetMachine.
+static std::string getMemoryProfileFile(const TargetMachine *TM) {
+  if (!MemoryProfileFile.empty())
+    return MemoryProfileFile.getValue();
+  const std::optional<PGOOptions> &PGOOpt = TM->getPGOOption();
+  if (PGOOpt == std::nullopt || (PGOOpt->Action != PGOOptions::SampleUse &&
+                                 PGOOpt->Action != PGOOptions::IRUse))
+    return std::string();
+  return PGOOpt->MemoryProfile;
 }
 
 //===---------------------------------------------------------------------===//
@@ -1272,7 +1288,7 @@ void TargetPassConfig::addMachinePasses() {
     // static data annotator pass is a module-wide pass. See the file comment
     // in StaticDataAnnotator.cpp for the motivation.
     addPass(createStaticDataSplitterPass());
-    addPass(createStaticDataAnnotatorPass());
+    addPass(createStaticDataAnnotatorPass(getMemoryProfileFile(TM), TM));
   }
   // We run the BasicBlockSections pass if either we need BB sections or BB
   // address map (or both).

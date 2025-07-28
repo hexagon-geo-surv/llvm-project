@@ -30,6 +30,9 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/ProfileData/DataAccessProf.h"
+#include "llvm/ProfileData/InstrProfReader.h"
+#include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 
 using namespace llvm;
@@ -62,7 +65,7 @@ class StaticDataSplitter : public MachineFunctionPass {
                               const MachineConstantPool *MCP);
 
   // Use profiles to partition static data.
-  bool partitionStaticDataWithProfiles(MachineFunction &MF);
+  bool partitionStaticDataWithPGOProfiles(MachineFunction &MF);
 
   // Update LLVM statistics for a machine function with profiles.
   void updateStatsWithProfiles(const MachineFunction &MF);
@@ -105,16 +108,18 @@ bool StaticDataSplitter::runOnMachineFunction(MachineFunction &MF) {
   SDPI = &getAnalysis<StaticDataProfileInfoWrapperPass>()
               .getStaticDataProfileInfo();
 
-  const bool ProfileAvailable = PSI && PSI->hasProfileSummary() && MBFI &&
-                                MF.getFunction().hasProfileData();
+  const bool PGOProfileAvailable = PSI && PSI->hasProfileSummary() && MBFI &&
+                                   MF.getFunction().hasProfileData();
 
-  if (!ProfileAvailable) {
+  // FIXME: Make use of DataAccessProfile if it is available even when
+  // FDO profile is not provided.
+  if (!PGOProfileAvailable) {
     annotateStaticDataWithoutProfiles(MF);
     updateStatsWithoutProfiles(MF);
     return false;
   }
 
-  bool Changed = partitionStaticDataWithProfiles(MF);
+  bool Changed = partitionStaticDataWithPGOProfiles(MF);
 
   updateStatsWithProfiles(MF);
   return Changed;
@@ -152,7 +157,8 @@ StaticDataSplitter::getConstant(const MachineOperand &Op,
   return CPE.Val.ConstVal;
 }
 
-bool StaticDataSplitter::partitionStaticDataWithProfiles(MachineFunction &MF) {
+bool StaticDataSplitter::partitionStaticDataWithPGOProfiles(
+    MachineFunction &MF) {
   // If any of the static data (jump tables, global variables, constant pools)
   // are captured by the analysis, set `Changed` to true. Note this pass won't
   // invalidate any analysis pass (see `getAnalysisUsage` above), so the main

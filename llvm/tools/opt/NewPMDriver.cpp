@@ -183,9 +183,7 @@ static cl::opt<PGOKind>
                                       "Use sampled profile to guide PGO.")));
 static cl::opt<std::string> ProfileFile("profile-file",
                                  cl::desc("Path to the profile."), cl::Hidden);
-static cl::opt<std::string>
-    MemoryProfileFile("memory-profile-file",
-                      cl::desc("Path to the memory profile."), cl::Hidden);
+extern cl::opt<std::string> MemoryProfileFile;
 
 static cl::opt<CSPGOKind> CSPGOKindFlag(
     "cspgo-kind", cl::init(NoCSPGO), cl::Hidden,

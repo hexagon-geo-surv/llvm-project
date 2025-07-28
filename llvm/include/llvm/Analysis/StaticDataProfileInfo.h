@@ -6,6 +6,7 @@
 #include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/Pass.h"
+#include "llvm/ProfileData/DataAccessProf.h"
 #include "llvm/Support/Compiler.h"
 
 namespace llvm {
