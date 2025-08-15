@@ -1873,15 +1873,23 @@ bool SITargetLowering::isLegalAddressingMode(const DataLayout &DL,
 
 bool SITargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
                                         const MachineFunction &MF) const {
-  if (AS == AMDGPUAS::GLOBAL_ADDRESS || AS == AMDGPUAS::FLAT_ADDRESS)
-    return (MemVT.getSizeInBits() <= 4 * 32);
-  if (AS == AMDGPUAS::PRIVATE_ADDRESS) {
+  switch (AS) {
+  default:
+    return true;
+  case AMDGPUAS::GLOBAL_ADDRESS:
+  case AMDGPUAS::FLAT_ADDRESS:
+  case AMDGPUAS::CONSTANT_ADDRESS:
+  case AMDGPUAS::CONSTANT_ADDRESS_32BIT:
+    return MemVT.getSizeInBits() <= 4 * 32;
+  case AMDGPUAS::PRIVATE_ADDRESS: {
     unsigned MaxPrivateBits = 8 * getSubtarget()->getMaxPrivateElementSize();
-    return (MemVT.getSizeInBits() <= MaxPrivateBits);
+    return MemVT.getSizeInBits() <= MaxPrivateBits;
   }
-  if (AS == AMDGPUAS::LOCAL_ADDRESS || AS == AMDGPUAS::REGION_ADDRESS)
-    return (MemVT.getSizeInBits() <= 2 * 32);
-  return true;
+  case AMDGPUAS::LOCAL_ADDRESS:
+  case AMDGPUAS::REGION_ADDRESS:
+    return MemVT.getSizeInBits() <= 2 * 32;
+  }
+  llvm_unreachable("this should not be reached");
 }
 
 bool SITargetLowering::allowsMisalignedMemoryAccessesImpl(
