@@ -288,7 +288,13 @@ void GlobalObject::setSection(StringRef S) {
   setGlobalObjectFlag(HasSectionHashEntryBit, !S.empty());
 }
 
+// TODO(b/xxx): returns bool to say whether the set is idempotent.
 void GlobalObject::setSectionPrefix(StringRef Prefix) {
+  if (Prefix.empty()) {
+    // Clear the section prefix metadata.
+    setMetadata(LLVMContext::MD_section_prefix, nullptr);
+    return;
+  }
   MDBuilder MDB(getContext());
   setMetadata(LLVMContext::MD_section_prefix,
               MDB.createGlobalObjectSectionPrefix(Prefix));
