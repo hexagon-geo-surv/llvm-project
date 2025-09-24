@@ -23,6 +23,12 @@ class TestFrameVarDILLiterals(TestBase):
         self.expect_var_path("true", value="true", type="bool")
         self.expect_var_path("false", value="false", type="bool")
 
+        # Check nullptr literal parsing
+        frame = thread.GetFrameAtIndex(0)
+        nullptr_t = frame.GetValueForVariablePath("std_nullptr_t").GetType().GetName()
+        nullptr_value = "0x" + "00" * self.target().GetAddressByteSize()
+        self.expect_var_path("nullptr", value=nullptr_value, type=nullptr_t)
+
         # Check number literals parsing
         self.expect_var_path("1.0", value="1", type="double")
         self.expect_var_path("1.0f", value="1", type="float")
@@ -47,7 +53,6 @@ class TestFrameVarDILLiterals(TestBase):
         )
 
         # Check integer literal type edge cases (dil::Interpreter::PickIntegerType)
-        frame = thread.GetFrameAtIndex(0)
         v = frame.GetValueForVariablePath("argc")
         # Creating an SBType from a BasicType still requires any value from the frame
         int_size = v.GetType().GetBasicType(lldb.eBasicTypeInt).GetByteSize()
