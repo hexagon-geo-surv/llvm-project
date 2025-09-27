@@ -37,6 +37,9 @@ cmake.source-dir = "."
 # This is for installing/distributing the python bindings target and only the python bindings target.
 build.targets = ["StandalonePythonModules"]
 install.components = ["StandalonePythonModules"]
+# If you strip then you get
+# LLVM ERROR: can't create Attribute 'mlir::StringAttr' because storage uniquer isn't initialized: the dialect was likely not loaded, or the attribute wasn't added with addAttributes<...>() in the Dialect::initialize() method.
+install.strip = false
 
 [tool.scikit-build.cmake.define]
 # Optional
