@@ -1990,38 +1990,38 @@ define <8 x half> @maxnum_v8f16(<8 x half> %0, <8 x half> %1) #0 {
 define void @pr63114() {
 ; CHECK-LIBCALL-LABEL: pr63114:
 ; CHECK-LIBCALL:       # %bb.0:
-; CHECK-LIBCALL-NEXT:    movdqu (%rax), %xmm4
-; CHECK-LIBCALL-NEXT:    pshuflw {{.*#+}} xmm0 = xmm4[0,1,3,3,4,5,6,7]
-; CHECK-LIBCALL-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,0,2,1]
-; CHECK-LIBCALL-NEXT:    movdqa {{.*#+}} xmm1 = [65535,65535,65535,0,65535,65535,65535,65535]
-; CHECK-LIBCALL-NEXT:    pand %xmm1, %xmm0
-; CHECK-LIBCALL-NEXT:    movq {{.*#+}} xmm2 = [0,0,0,15360,0,0,0,0]
-; CHECK-LIBCALL-NEXT:    por %xmm2, %xmm0
-; CHECK-LIBCALL-NEXT:    movdqa {{.*#+}} xmm3 = [65535,65535,65535,65535,65535,65535,65535,0]
-; CHECK-LIBCALL-NEXT:    pand %xmm3, %xmm0
-; CHECK-LIBCALL-NEXT:    movdqa {{.*#+}} xmm5 = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,60]
-; CHECK-LIBCALL-NEXT:    por %xmm5, %xmm0
-; CHECK-LIBCALL-NEXT:    pshufhw {{.*#+}} xmm6 = xmm4[0,1,2,3,4,5,7,7]
-; CHECK-LIBCALL-NEXT:    pshufd {{.*#+}} xmm6 = xmm6[0,2,2,3]
-; CHECK-LIBCALL-NEXT:    pand %xmm1, %xmm6
-; CHECK-LIBCALL-NEXT:    por %xmm2, %xmm6
-; CHECK-LIBCALL-NEXT:    pand %xmm3, %xmm6
-; CHECK-LIBCALL-NEXT:    por %xmm5, %xmm6
-; CHECK-LIBCALL-NEXT:    pshufhw {{.*#+}} xmm7 = xmm4[0,1,2,3,5,5,5,5]
-; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm4 = xmm4[0,3,0,3]
-; CHECK-LIBCALL-NEXT:    pshufhw {{.*#+}} xmm4 = xmm4[0,1,2,3,5,5,5,5]
-; CHECK-LIBCALL-NEXT:    pand %xmm1, %xmm4
-; CHECK-LIBCALL-NEXT:    por %xmm2, %xmm4
-; CHECK-LIBCALL-NEXT:    pand %xmm3, %xmm4
-; CHECK-LIBCALL-NEXT:    por %xmm5, %xmm4
-; CHECK-LIBCALL-NEXT:    pand %xmm1, %xmm7
-; CHECK-LIBCALL-NEXT:    por %xmm2, %xmm7
-; CHECK-LIBCALL-NEXT:    pand %xmm3, %xmm7
-; CHECK-LIBCALL-NEXT:    por %xmm5, %xmm7
-; CHECK-LIBCALL-NEXT:    movdqu %xmm7, 0
-; CHECK-LIBCALL-NEXT:    movdqu %xmm4, 32
-; CHECK-LIBCALL-NEXT:    movdqu %xmm6, 48
-; CHECK-LIBCALL-NEXT:    movdqu %xmm0, 16
+; CHECK-LIBCALL-NEXT:    movups (%rax), %xmm0
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm1
+; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm1 = xmm1[3,3],xmm0[3,3]
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm3
+; CHECK-LIBCALL-NEXT:    psrld $16, %xmm3
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm2
+; CHECK-LIBCALL-NEXT:    unpckhpd {{.*#+}} xmm2 = xmm2[1],xmm0[1]
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm5
+; CHECK-LIBCALL-NEXT:    psrldq {{.*#+}} xmm5 = xmm5[14,15],zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm4
+; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm4 = xmm4[1,1],xmm0[1,1]
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm6
+; CHECK-LIBCALL-NEXT:    psrldq {{.*#+}} xmm6 = xmm6[10,11,12,13,14,15],zero,zero,zero,zero,zero,zero,zero,zero,zero,zero
+; CHECK-LIBCALL-NEXT:    movaps %xmm0, %xmm7
+; CHECK-LIBCALL-NEXT:    psrlq $48, %xmm7
+; CHECK-LIBCALL-NEXT:    pinsrw $0, {{\.?LCPI[0-9]+_[0-9]+}}(%rip), %xmm8
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm7 = xmm7[0],xmm8[0],xmm7[1],xmm8[1],xmm7[2],xmm8[2],xmm7[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm8[0],xmm0[1],xmm8[1],xmm0[2],xmm8[2],xmm0[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm0 = xmm0[0,0],xmm7[0,0]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm6 = xmm6[0],xmm8[0],xmm6[1],xmm8[1],xmm6[2],xmm8[2],xmm6[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm4 = xmm4[0],xmm8[0],xmm4[1],xmm8[1],xmm4[2],xmm8[2],xmm4[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm4 = xmm4[0,0],xmm6[0,0]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm5 = xmm5[0],xmm8[0],xmm5[1],xmm8[1],xmm5[2],xmm8[2],xmm5[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm8[0],xmm2[1],xmm8[1],xmm2[2],xmm8[2],xmm2[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm2 = xmm2[0,0],xmm5[0,0]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm3 = xmm3[0],xmm8[0],xmm3[1],xmm8[1],xmm3[2],xmm8[2],xmm3[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm8[0],xmm1[1],xmm8[1],xmm1[2],xmm8[2],xmm1[3],xmm8[3]
+; CHECK-LIBCALL-NEXT:    shufps {{.*#+}} xmm1 = xmm1[0,0],xmm3[0,0]
+; CHECK-LIBCALL-NEXT:    movups %xmm1, 32
+; CHECK-LIBCALL-NEXT:    movups %xmm2, 48
+; CHECK-LIBCALL-NEXT:    movups %xmm4, 0
+; CHECK-LIBCALL-NEXT:    movups %xmm0, 16
 ; CHECK-LIBCALL-NEXT:    retq
 ;
 ; BWON-F16C-LABEL: pr63114:
@@ -2055,38 +2055,43 @@ define void @pr63114() {
 ;
 ; CHECK-I686-LABEL: pr63114:
 ; CHECK-I686:       # %bb.0:
-; CHECK-I686-NEXT:    movdqu (%eax), %xmm6
-; CHECK-I686-NEXT:    pshuflw {{.*#+}} xmm0 = xmm6[0,1,3,3,4,5,6,7]
-; CHECK-I686-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,0,2,1]
-; CHECK-I686-NEXT:    movdqa {{.*#+}} xmm1 = [65535,65535,65535,0,65535,65535,65535,65535]
-; CHECK-I686-NEXT:    pand %xmm1, %xmm0
-; CHECK-I686-NEXT:    movq {{.*#+}} xmm2 = [0,0,0,15360,0,0,0,0]
-; CHECK-I686-NEXT:    por %xmm2, %xmm0
-; CHECK-I686-NEXT:    movdqa {{.*#+}} xmm3 = [65535,65535,65535,65535,65535,65535,65535,0]
-; CHECK-I686-NEXT:    pand %xmm3, %xmm0
-; CHECK-I686-NEXT:    movdqa {{.*#+}} xmm4 = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,60]
-; CHECK-I686-NEXT:    por %xmm4, %xmm0
-; CHECK-I686-NEXT:    pshufhw {{.*#+}} xmm5 = xmm6[0,1,2,3,4,5,7,7]
-; CHECK-I686-NEXT:    pshufd {{.*#+}} xmm5 = xmm5[0,2,2,3]
-; CHECK-I686-NEXT:    pand %xmm1, %xmm5
-; CHECK-I686-NEXT:    por %xmm2, %xmm5
-; CHECK-I686-NEXT:    pand %xmm3, %xmm5
-; CHECK-I686-NEXT:    por %xmm4, %xmm5
-; CHECK-I686-NEXT:    pshufhw {{.*#+}} xmm7 = xmm6[0,1,2,3,5,5,5,5]
-; CHECK-I686-NEXT:    shufps {{.*#+}} xmm6 = xmm6[0,3,0,3]
-; CHECK-I686-NEXT:    pshufhw {{.*#+}} xmm6 = xmm6[0,1,2,3,5,5,5,5]
-; CHECK-I686-NEXT:    pand %xmm1, %xmm6
-; CHECK-I686-NEXT:    por %xmm2, %xmm6
-; CHECK-I686-NEXT:    pand %xmm3, %xmm6
-; CHECK-I686-NEXT:    por %xmm4, %xmm6
-; CHECK-I686-NEXT:    pand %xmm1, %xmm7
-; CHECK-I686-NEXT:    por %xmm2, %xmm7
-; CHECK-I686-NEXT:    pand %xmm3, %xmm7
-; CHECK-I686-NEXT:    por %xmm4, %xmm7
-; CHECK-I686-NEXT:    movdqu %xmm7, 0
-; CHECK-I686-NEXT:    movdqu %xmm6, 32
-; CHECK-I686-NEXT:    movdqu %xmm5, 48
-; CHECK-I686-NEXT:    movdqu %xmm0, 16
+; CHECK-I686-NEXT:    subl $28, %esp
+; CHECK-I686-NEXT:    .cfi_def_cfa_offset 32
+; CHECK-I686-NEXT:    movdqu (%eax), %xmm0
+; CHECK-I686-NEXT:    movdqa %xmm0, %xmm3
+; CHECK-I686-NEXT:    movdqa %xmm0, (%esp) # 16-byte Spill
+; CHECK-I686-NEXT:    movdqa %xmm0, %xmm2
+; CHECK-I686-NEXT:    movdqa %xmm0, %xmm5
+; CHECK-I686-NEXT:    movdqa %xmm0, %xmm4
+; CHECK-I686-NEXT:    movdqa %xmm0, %xmm7
+; CHECK-I686-NEXT:    psrlq $48, %xmm7
+; CHECK-I686-NEXT:    pinsrw $0, {{\.?LCPI[0-9]+_[0-9]+}}, %xmm6
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm7 = xmm7[0],xmm6[0],xmm7[1],xmm6[1],xmm7[2],xmm6[2],xmm7[3],xmm6[3]
+; CHECK-I686-NEXT:    movdqa %xmm0, %xmm1
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm6[0],xmm0[1],xmm6[1],xmm0[2],xmm6[2],xmm0[3],xmm6[3]
+; CHECK-I686-NEXT:    shufps {{.*#+}} xmm0 = xmm0[0,0],xmm7[0,0]
+; CHECK-I686-NEXT:    shufps {{.*#+}} xmm4 = xmm4[1,1,1,1]
+; CHECK-I686-NEXT:    psrldq {{.*#+}} xmm1 = xmm1[10,11,12,13,14,15],zero,zero,zero,zero,zero,zero,zero,zero,zero,zero
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm6[0],xmm1[1],xmm6[1],xmm1[2],xmm6[2],xmm1[3],xmm6[3]
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm4 = xmm4[0],xmm6[0],xmm4[1],xmm6[1],xmm4[2],xmm6[2],xmm4[3],xmm6[3]
+; CHECK-I686-NEXT:    shufps {{.*#+}} xmm4 = xmm4[0,0],xmm1[0,0]
+; CHECK-I686-NEXT:    punpckhqdq {{.*#+}} xmm2 = xmm2[1,1]
+; CHECK-I686-NEXT:    psrldq {{.*#+}} xmm5 = xmm5[14,15],zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero,zero
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm5 = xmm5[0],xmm6[0],xmm5[1],xmm6[1],xmm5[2],xmm6[2],xmm5[3],xmm6[3]
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm6[0],xmm2[1],xmm6[1],xmm2[2],xmm6[2],xmm2[3],xmm6[3]
+; CHECK-I686-NEXT:    shufps {{.*#+}} xmm2 = xmm2[0,0],xmm5[0,0]
+; CHECK-I686-NEXT:    shufps {{.*#+}} xmm3 = xmm3[3,3,3,3]
+; CHECK-I686-NEXT:    movdqa (%esp), %xmm1 # 16-byte Reload
+; CHECK-I686-NEXT:    psrld $16, %xmm1
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm6[0],xmm1[1],xmm6[1],xmm1[2],xmm6[2],xmm1[3],xmm6[3]
+; CHECK-I686-NEXT:    punpcklwd {{.*#+}} xmm3 = xmm3[0],xmm6[0],xmm3[1],xmm6[1],xmm3[2],xmm6[2],xmm3[3],xmm6[3]
+; CHECK-I686-NEXT:    shufps {{.*#+}} xmm3 = xmm3[0,0],xmm1[0,0]
+; CHECK-I686-NEXT:    movups %xmm3, 32
+; CHECK-I686-NEXT:    movups %xmm2, 48
+; CHECK-I686-NEXT:    movups %xmm4, 0
+; CHECK-I686-NEXT:    movups %xmm0, 16
+; CHECK-I686-NEXT:    addl $28, %esp
+; CHECK-I686-NEXT:    .cfi_def_cfa_offset 4
 ; CHECK-I686-NEXT:    retl
   %1 = load <24 x half>, ptr poison, align 2
   %2 = shufflevector <24 x half> %1, <24 x half> poison, <8 x i32> <i32 2, i32 5, i32 8, i32 11, i32 14, i32 17, i32 20, i32 23>
