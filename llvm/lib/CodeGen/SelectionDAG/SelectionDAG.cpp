@@ -10738,14 +10738,14 @@ SDValue SelectionDAG::getLoad(EVT VT, const SDLoc &dl, SDValue Chain,
                               MaybeAlign Alignment,
                               MachineMemOperand::Flags MMOFlags,
                               const AAMDNodes &AAInfo, const MDNode *Ranges) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoad(ISD::UNINDEXED, ISD::NON_EXTLOAD, VT, dl, Chain, Ptr, Undef,
                  PtrInfo, VT, Alignment, MMOFlags, AAInfo, Ranges);
 }
 
 SDValue SelectionDAG::getLoad(EVT VT, const SDLoc &dl, SDValue Chain,
                               SDValue Ptr, MachineMemOperand *MMO) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoad(ISD::UNINDEXED, ISD::NON_EXTLOAD, VT, dl, Chain, Ptr, Undef,
                  VT, MMO);
 }
@@ -10756,7 +10756,7 @@ SDValue SelectionDAG::getExtLoad(ISD::LoadExtType ExtType, const SDLoc &dl,
                                  MaybeAlign Alignment,
                                  MachineMemOperand::Flags MMOFlags,
                                  const AAMDNodes &AAInfo) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoad(ISD::UNINDEXED, ExtType, VT, dl, Chain, Ptr, Undef, PtrInfo,
                  MemVT, Alignment, MMOFlags, AAInfo);
 }
@@ -10764,7 +10764,7 @@ SDValue SelectionDAG::getExtLoad(ISD::LoadExtType ExtType, const SDLoc &dl,
 SDValue SelectionDAG::getExtLoad(ISD::LoadExtType ExtType, const SDLoc &dl,
                                  EVT VT, SDValue Chain, SDValue Ptr, EVT MemVT,
                                  MachineMemOperand *MMO) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoad(ISD::UNINDEXED, ExtType, VT, dl, Chain, Ptr, Undef,
                  MemVT, MMO);
 }
@@ -10805,7 +10805,7 @@ SDValue SelectionDAG::getStore(SDValue Chain, const SDLoc &dl, SDValue Val,
 
 SDValue SelectionDAG::getStore(SDValue Chain, const SDLoc &dl, SDValue Val,
                                SDValue Ptr, MachineMemOperand *MMO) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getStore(Chain, dl, Val, Ptr, Undef, Val.getValueType(), MMO,
                   ISD::UNINDEXED);
 }
@@ -10860,8 +10860,9 @@ SDValue SelectionDAG::getStore(SDValue Chain, const SDLoc &dl, SDValue Val,
 }
 
 SDValue SelectionDAG::getTruncStore(SDValue Chain, const SDLoc &dl, SDValue Val,
-                                    SDValue Ptr, MachinePointerInfo PtrInfo,
-                                    EVT SVT, Align Alignment,
+                                    SDValue Ptr, SDValue Offset,
+                                    MachinePointerInfo PtrInfo, EVT SVT,
+                                    Align Alignment,
                                     MachineMemOperand::Flags MMOFlags,
                                     const AAMDNodes &AAInfo) {
   assert(Chain.getValueType() == MVT::Other &&
@@ -10876,14 +10877,29 @@ SDValue SelectionDAG::getTruncStore(SDValue Chain, const SDLoc &dl, SDValue Val,
   MachineFunction &MF = getMachineFunction();
   MachineMemOperand *MMO = MF.getMachineMemOperand(
       PtrInfo, MMOFlags, SVT.getStoreSize(), Alignment, AAInfo);
-  return getTruncStore(Chain, dl, Val, Ptr, SVT, MMO);
+  return getTruncStore(Chain, dl, Val, Ptr, Offset, SVT, MMO);
+}
+
+SDValue SelectionDAG::getTruncStore(SDValue Chain, const SDLoc &dl, SDValue Val,
+                                    SDValue Ptr, MachinePointerInfo PtrInfo,
+                                    EVT SVT, Align Alignment,
+                                    MachineMemOperand::Flags MMOFlags,
+                                    const AAMDNodes &AAInfo) {
+  return getTruncStore(Chain, dl, Val, Ptr, getPOISON(Ptr.getValueType()),
+                       PtrInfo, SVT, Alignment, MMOFlags, AAInfo);
+}
+
+SDValue SelectionDAG::getTruncStore(SDValue Chain, const SDLoc &dl, SDValue Val,
+                                    SDValue Ptr, SDValue Offset, EVT SVT,
+                                    MachineMemOperand *MMO) {
+  return getStore(Chain, dl, Val, Ptr, Offset, SVT, MMO, ISD::UNINDEXED, true);
 }
 
 SDValue SelectionDAG::getTruncStore(SDValue Chain, const SDLoc &dl, SDValue Val,
                                     SDValue Ptr, EVT SVT,
                                     MachineMemOperand *MMO) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
-  return getStore(Chain, dl, Val, Ptr, Undef, SVT, MMO, ISD::UNINDEXED, true);
+  return getStore(Chain, dl, Val, Ptr, getPOISON(Ptr.getValueType()), SVT, MMO,
+                  ISD::UNINDEXED, true);
 }
 
 SDValue SelectionDAG::getIndexedStore(SDValue OrigStore, const SDLoc &dl,
@@ -10965,7 +10981,7 @@ SDValue SelectionDAG::getLoadVP(EVT VT, const SDLoc &dl, SDValue Chain,
                                 MachineMemOperand::Flags MMOFlags,
                                 const AAMDNodes &AAInfo, const MDNode *Ranges,
                                 bool IsExpanding) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoadVP(ISD::UNINDEXED, ISD::NON_EXTLOAD, VT, dl, Chain, Ptr, Undef,
                    Mask, EVL, PtrInfo, VT, Alignment, MMOFlags, AAInfo, Ranges,
                    IsExpanding);
@@ -10974,7 +10990,7 @@ SDValue SelectionDAG::getLoadVP(EVT VT, const SDLoc &dl, SDValue Chain,
 SDValue SelectionDAG::getLoadVP(EVT VT, const SDLoc &dl, SDValue Chain,
                                 SDValue Ptr, SDValue Mask, SDValue EVL,
                                 MachineMemOperand *MMO, bool IsExpanding) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoadVP(ISD::UNINDEXED, ISD::NON_EXTLOAD, VT, dl, Chain, Ptr, Undef,
                    Mask, EVL, VT, MMO, IsExpanding);
 }
@@ -10986,7 +11002,7 @@ SDValue SelectionDAG::getExtLoadVP(ISD::LoadExtType ExtType, const SDLoc &dl,
                                    MaybeAlign Alignment,
                                    MachineMemOperand::Flags MMOFlags,
                                    const AAMDNodes &AAInfo, bool IsExpanding) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoadVP(ISD::UNINDEXED, ExtType, VT, dl, Chain, Ptr, Undef, Mask,
                    EVL, PtrInfo, MemVT, Alignment, MMOFlags, AAInfo, nullptr,
                    IsExpanding);
@@ -10996,7 +11012,7 @@ SDValue SelectionDAG::getExtLoadVP(ISD::LoadExtType ExtType, const SDLoc &dl,
                                    EVT VT, SDValue Chain, SDValue Ptr,
                                    SDValue Mask, SDValue EVL, EVT MemVT,
                                    MachineMemOperand *MMO, bool IsExpanding) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getLoadVP(ISD::UNINDEXED, ExtType, VT, dl, Chain, Ptr, Undef, Mask,
                    EVL, MemVT, MMO, IsExpanding);
 }
@@ -11086,7 +11102,7 @@ SDValue SelectionDAG::getTruncStoreVP(SDValue Chain, const SDLoc &dl,
 
   assert(Chain.getValueType() == MVT::Other && "Invalid chain type");
   if (VT == SVT)
-    return getStoreVP(Chain, dl, Val, Ptr, getUNDEF(Ptr.getValueType()), Mask,
+    return getStoreVP(Chain, dl, Val, Ptr, getPOISON(Ptr.getValueType()), Mask,
                       EVL, VT, MMO, ISD::UNINDEXED,
                       /*IsTruncating*/ false, IsCompressing);
 
@@ -11100,7 +11116,7 @@ SDValue SelectionDAG::getTruncStoreVP(SDValue Chain, const SDLoc &dl,
          "Cannot use trunc store to change the number of vector elements!");
 
   SDVTList VTs = getVTList(MVT::Other);
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   SDValue Ops[] = {Chain, Val, Ptr, Undef, Mask, EVL};
   FoldingSetNodeID ID;
   AddNodeIDNode(ID, ISD::VP_STORE, VTs, Ops);
@@ -11195,7 +11211,7 @@ SDValue SelectionDAG::getStridedLoadVP(EVT VT, const SDLoc &DL, SDValue Chain,
                                        SDValue Mask, SDValue EVL,
                                        MachineMemOperand *MMO,
                                        bool IsExpanding) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getStridedLoadVP(ISD::UNINDEXED, ISD::NON_EXTLOAD, VT, DL, Chain, Ptr,
                           Undef, Stride, Mask, EVL, VT, MMO, IsExpanding);
 }
@@ -11204,7 +11220,7 @@ SDValue SelectionDAG::getExtStridedLoadVP(
     ISD::LoadExtType ExtType, const SDLoc &DL, EVT VT, SDValue Chain,
     SDValue Ptr, SDValue Stride, SDValue Mask, SDValue EVL, EVT MemVT,
     MachineMemOperand *MMO, bool IsExpanding) {
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   return getStridedLoadVP(ISD::UNINDEXED, ExtType, VT, DL, Chain, Ptr, Undef,
                           Stride, Mask, EVL, MemVT, MMO, IsExpanding);
 }
@@ -11255,7 +11271,7 @@ SDValue SelectionDAG::getTruncStridedStoreVP(SDValue Chain, const SDLoc &DL,
 
   assert(Chain.getValueType() == MVT::Other && "Invalid chain type");
   if (VT == SVT)
-    return getStridedStoreVP(Chain, DL, Val, Ptr, getUNDEF(Ptr.getValueType()),
+    return getStridedStoreVP(Chain, DL, Val, Ptr, getPOISON(Ptr.getValueType()),
                              Stride, Mask, EVL, VT, MMO, ISD::UNINDEXED,
                              /*IsTruncating*/ false, IsCompressing);
 
@@ -11269,7 +11285,7 @@ SDValue SelectionDAG::getTruncStridedStoreVP(SDValue Chain, const SDLoc &DL,
          "Cannot use trunc store to change the number of vector elements!");
 
   SDVTList VTs = getVTList(MVT::Other);
-  SDValue Undef = getUNDEF(Ptr.getValueType());
+  SDValue Undef = getPOISON(Ptr.getValueType());
   SDValue Ops[] = {Chain, Val, Ptr, Undef, Stride, Mask, EVL};
   FoldingSetNodeID ID;
   AddNodeIDNode(ID, ISD::EXPERIMENTAL_VP_STRIDED_STORE, VTs, Ops);

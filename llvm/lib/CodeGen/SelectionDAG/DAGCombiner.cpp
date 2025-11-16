@@ -21897,7 +21897,7 @@ SDValue DAGCombiner::visitLOAD(SDNode *N) {
       bool CanSplitIdx = canSplitIdx(LD);
 
       if (!N->hasAnyUseOfValue(0) && (CanSplitIdx || !N->hasAnyUseOfValue(1))) {
-        SDValue Undef = DAG.getUNDEF(N->getValueType(0));
+        SDValue Undef = DAG.getPOISON(N->getValueType(0));
         SDValue Index;
         if (N->hasAnyUseOfValue(1) && CanSplitIdx) {
           Index = SplitIndexingFromLoad(LD);
@@ -21905,7 +21905,7 @@ SDValue DAGCombiner::visitLOAD(SDNode *N) {
           // stores.
           AddUsersToWorklist(N);
         } else
-          Index = DAG.getUNDEF(N->getValueType(1));
+          Index = DAG.getPOISON(N->getValueType(1));
         LLVM_DEBUG(dbgs() << "\nReplacing.7 "; N->dump(&DAG);
                    dbgs() << "\nWith: "; Undef.dump(&DAG);
                    dbgs() << " and 2 other values\n");
@@ -21930,8 +21930,9 @@ SDValue DAGCombiner::visitLOAD(SDNode *N) {
     if (MaybeAlign Alignment = DAG.InferPtrAlign(Ptr)) {
       if (*Alignment > LD->getAlign() &&
           isAligned(*Alignment, LD->getSrcValueOffset())) {
-        SDValue NewLoad = DAG.getExtLoad(
-            LD->getExtensionType(), SDLoc(N), LD->getValueType(0), Chain, Ptr,
+        SDValue NewLoad = DAG.getLoad(
+            LD->getAddressingMode(), LD->getExtensionType(),
+            LD->getValueType(0), SDLoc(N), Chain, Ptr, LD->getOffset(),
             LD->getPointerInfo(), LD->getMemoryVT(), *Alignment,
             LD->getMemOperand()->getFlags(), LD->getAAInfo());
         // NewLoad will always be N as we are only refining the alignment
@@ -24462,10 +24463,10 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
     if (MaybeAlign Alignment = DAG.InferPtrAlign(Ptr)) {
       if (*Alignment > ST->getAlign() &&
           isAligned(*Alignment, ST->getSrcValueOffset())) {
-        SDValue NewStore =
-            DAG.getTruncStore(Chain, SDLoc(N), Value, Ptr, ST->getPointerInfo(),
-                              ST->getMemoryVT(), *Alignment,
-                              ST->getMemOperand()->getFlags(), ST->getAAInfo());
+        SDValue NewStore = DAG.getTruncStore(
+            Chain, SDLoc(N), Value, Ptr, ST->getOffset(), ST->getPointerInfo(),
+            ST->getMemoryVT(), *Alignment, ST->getMemOperand()->getFlags(),
+            ST->getAAInfo());
         // NewStore will always be N as we are only refining the alignment
         assert(NewStore.getNode() == N);
         (void)NewStore;
