@@ -1666,6 +1666,12 @@ std::unique_ptr<CFG> CFGBuilder::buildCFG(const Decl *D, Stmt *Statement) {
   assert(Succ == &cfg->getExit());
   Block = nullptr;  // the EXIT block is empty.  Create all other blocks lazily.
 
+  // Add parameters to the initial scope to handle their dtos and lifetime ends.
+  LocalScope *paramScope = nullptr;
+  if (const auto *FD = dyn_cast_or_null<FunctionDecl>(D))
+    for (ParmVarDecl *PD : FD->parameters())
+      paramScope = addLocalScopeForVarDecl(PD, paramScope);
+
   if (BuildOpts.AddImplicitDtors)
     if (const CXXDestructorDecl *DD = dyn_cast_or_null<CXXDestructorDecl>(D))
       addImplicitDtorsForDestructor(DD);
@@ -2244,6 +2250,9 @@ LocalScope* CFGBuilder::addLocalScopeForVarDecl(VarDecl *VD,
 
   // Check if variable is local.
   if (!VD->hasLocalStorage())
+    return Scope;
+
+  if (isa<ParmVarDecl>(VD) && VD->getType()->isReferenceType())
     return Scope;
 
   if (!BuildOpts.AddLifetime && !BuildOpts.AddScopes &&
@@ -5616,8 +5625,14 @@ public:
   bool handleDecl(const Decl *D, raw_ostream &OS) {
     DeclMapTy::iterator I = DeclMap.find(D);
 
-    if (I == DeclMap.end())
+    if (I == DeclMap.end()) {
+      // CFG does not have the decls for ParmVarDecl.
+      if (auto *PVD = dyn_cast_or_null<ParmVarDecl>(D)) {
+        OS << "[Parm: " << PVD->getNameAsString() << "]";
+        return true;
+      }
       return false;
+    }
 
     if (currentBlock >= 0 && I->second.first == (unsigned) currentBlock
                           && I->second.second == currStmt) {
