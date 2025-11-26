@@ -2867,7 +2867,7 @@ public:
     return false;
   }
 
-  void addBTItoBBStart(BinaryBasicBlock &BB, MCInst &Call) const override {
+  void insertBTI(BinaryBasicBlock &BB, MCInst &Call) const override {
     auto II = BB.getFirstNonPseudo();
     if (II != BB.end()) {
       if (isBTIVariantCoveringCall(Call, *II))
