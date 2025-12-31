@@ -7,6 +7,20 @@
 # RELOC:      Relocations [
 # RELOC-NEXT:   Section ({{.*}}) .rela.text {
 
+call sym_call
+# CHECK:      pcaddu18i $ra, %call36(sym_call)
+# CHECK-NEXT: jirl $ra, $ra, 0
+
+# RELOC-NEXT: R_LARCH_CALL36 sym_call 0x0
+# RELAX-NEXT: R_LARCH_RELAX - 0x0
+
+tail $t0, sym_tail
+# CHECK:      pcaddu18i $t0, %call36(sym_tail)
+# CHECK-NEXT: jr $t0
+
+# RELOC-NEXT: R_LARCH_CALL36 sym_tail 0x0
+# RELAX-NEXT: R_LARCH_RELAX - 0x0
+
 call30 sym_call
 # CHECK:      pcaddu12i $ra, %call30(sym_call)
 # CHECK-NEXT: jirl $ra, $ra, 0
