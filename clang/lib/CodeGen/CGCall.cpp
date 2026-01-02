@@ -1941,11 +1941,9 @@ static bool HasStrictReturn(const CodeGenModule &Module, QualType RetTy,
 static void addDenormalModeAttrs(llvm::DenormalMode FPDenormalMode,
                                  llvm::DenormalMode FP32DenormalMode,
                                  llvm::AttrBuilder &FuncAttrs) {
-  if (FPDenormalMode != llvm::DenormalMode::getDefault())
-    FuncAttrs.addAttribute("denormal-fp-math", FPDenormalMode.str());
-
-  if (FP32DenormalMode != FPDenormalMode && FP32DenormalMode.isValid())
-    FuncAttrs.addAttribute("denormal-fp-math-f32", FP32DenormalMode.str());
+  llvm::DenormalFPEnv FPEnv(FPDenormalMode, FP32DenormalMode);
+  if (FPEnv != llvm::DenormalFPEnv::getDefault())
+    FuncAttrs.addDenormalFPEnvAttr(FPEnv);
 }
 
 /// Add default attributes to a function, which have merge semantics under
@@ -2178,24 +2176,16 @@ void CodeGen::mergeDefaultFunctionDefinitionAttributes(
         CodeGenOpts.FP32DenormalMode.mergeCalleeMode(DenormModeToMergeF32);
   }
 
-  if (Merged == llvm::DenormalMode::getDefault()) {
-    AttrsToRemove.addAttribute("denormal-fp-math");
-  } else if (Merged != DenormModeToMerge) {
-    // Overwrite existing attribute
-    FuncAttrs.addAttribute("denormal-fp-math",
-                           CodeGenOpts.FPDenormalMode.str());
-  }
+  llvm::DenormalFPEnv MergedFPEnv(Merged, MergedF32);
 
-  if (MergedF32 == llvm::DenormalMode::getDefault()) {
-    AttrsToRemove.addAttribute("denormal-fp-math-f32");
-  } else if (MergedF32 != DenormModeToMergeF32) {
+  if (MergedFPEnv == llvm::DenormalFPEnv::getDefault()) {
+    AttrsToRemove.addAttribute(llvm::Attribute::DenormalFPMath);
+  } else {
     // Overwrite existing attribute
-    FuncAttrs.addAttribute("denormal-fp-math-f32",
-                           CodeGenOpts.FP32DenormalMode.str());
+    FuncAttrs.addDenormalFPEnvAttr(MergedFPEnv);
   }
 
   F.removeFnAttrs(AttrsToRemove);
-  addDenormalModeAttrs(Merged, MergedF32, FuncAttrs);
 
   overrideFunctionFeaturesWithTargetFeatures(FuncAttrs, F, TargetOpts);
 

@@ -3872,6 +3872,9 @@ void Verifier::visitCallBase(CallBase &Call) {
           "llvm.call.preallocated.arg");
   }
 
+  Check(!Attrs.hasFnAttr(Attribute::DenormalFPEnv),
+        "denormal_fpenv attribute may not apply to call sites", Call);
+
   // Verify call attributes.
   verifyFunctionAttrs(FTy, Attrs, &Call, IsIntrinsic, Call.isInlineAsm());
 
