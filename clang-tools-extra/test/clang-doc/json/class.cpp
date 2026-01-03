@@ -336,8 +336,6 @@ private:
 // HTML-NEXT:         <div id="{{([0-9A-F]{40})}}" class="delimiter-container">
 // HTML-NEXT:                 <pre><code class="language-cpp code-clang-doc">int protectedMethod ()</code></pre>
 // HTML-NEXT:         </div>
-// HTML-NEXT:     </div>
-// HTML-NEXT: </section>
 // HTML:      <section id="Classes" class="section-container">
 // HTML-NEXT:     <h2>Inner Classes</h2>
 // HTML-NEXT:     <ul class="class-container">

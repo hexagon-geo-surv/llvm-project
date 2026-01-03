@@ -84,7 +84,7 @@ serializeLocation(const Location &Loc,
     return LocationObj;
   SmallString<128> FileURL(*RepositoryUrl);
   sys::path::append(FileURL, sys::path::Style::posix, Loc.Filename);
-  FileURL += "#" + std::to_string(Loc.StartLineNumber);
+  FileURL += "#L" + std::to_string(Loc.StartLineNumber);
   LocationObj["FileURL"] = FileURL;
   return LocationObj;
 }
