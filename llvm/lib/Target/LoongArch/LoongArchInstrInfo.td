@@ -474,6 +474,10 @@ def simm20_lu32id : SImm20Operand {
   let ParserMatchClass = SImmAsmOperand<20, "lu32id">;
 }
 
+def simm20_pcaddu12i : SImm20Operand {
+  let ParserMatchClass = SImmAsmOperand<20, "pcaddu12i">;
+}
+
 def simm20_pcaddu18i : SImm20Operand {
   let ParserMatchClass = SImmAsmOperand<20, "pcaddu18i">;
 }
@@ -855,7 +859,7 @@ def SLT  : ALU_3R<0x00120000>;
 def SLTU : ALU_3R<0x00128000>;
 def SLTI  : ALU_2RI12<0x02000000, simm12>;
 def SLTUI : ALU_2RI12<0x02400000, simm12>;
-def PCADDU12I : ALU_1RI20<0x1c000000, simm20>;
+def PCADDU12I : ALU_1RI20<0x1c000000, simm20_pcaddu12i>;
 def AND  : ALU_3R<0x00148000>;
 def OR   : ALU_3R<0x00150000>;
 def NOR  : ALU_3R<0x00140000>;
