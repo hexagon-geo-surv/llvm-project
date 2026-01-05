@@ -63,11 +63,6 @@ static cl::opt<bool> ForceEmitZeroLoadFlag(
     cl::desc("Force all waitcnt load counters to wait until 0"),
     cl::init(false), cl::Hidden);
 
-static cl::opt<bool> ExpandWaitcntProfiling(
-    "amdgpu-expand-waitcnt-profiling",
-    cl::desc("Expand s_waitcnt instructions for profiling"), cl::init(false),
-    cl::Hidden);
-
 namespace {
 // Class of object that encapsulates latest instruction counter score
 // associated with the operand.  Used for determining whether
@@ -287,6 +282,7 @@ protected:
   AMDGPU::IsaVersion IV;
   InstCounterType MaxCounter;
   bool OptNone;
+  bool ExpandWaitcntProfiling = false;
   const AMDGPU::HardwareLimits *Limits = nullptr;
 
 public:
@@ -297,6 +293,8 @@ public:
         IV(AMDGPU::getIsaVersion(ST->getCPU())), MaxCounter(MaxCounter),
         OptNone(MF.getFunction().hasOptNone() ||
                 MF.getTarget().getOptLevel() == CodeGenOptLevel::None),
+        ExpandWaitcntProfiling(
+            MF.getFunction().hasFnAttribute("amdgpu-expand-waitcnt-profiling")),
         Limits(Limits) {}
 
   // Return true if the current function should be compiled with no
@@ -2978,12 +2976,6 @@ bool SIInsertWaitcnts::run(MachineFunction &MF) {
   WaitEventMaskForInst = WCG->getWaitEventMask();
 
   SmemAccessCounter = eventCounter(WaitEventMaskForInst, SMEM_ACCESS);
-
-  [[maybe_unused]] unsigned NumVGPRsMax =
-      ST->getAddressableNumVGPRs(MFI->getDynamicVGPRBlockSize());
-  [[maybe_unused]] unsigned NumSGPRsMax = ST->getAddressableNumSGPRs();
-  assert(NumVGPRsMax <= SQ_MAX_PGM_VGPRS);
-  assert(NumSGPRsMax <= SQ_MAX_PGM_SGPRS);
 
   BlockInfos.clear();
   bool Modified = false;
