@@ -466,6 +466,7 @@ static bool initTargetOptions(const CompilerInstance &CI,
   Options.Hotpatch = CodeGenOpts.HotPatch;
   Options.JMCInstrument = CodeGenOpts.JMCInstrument;
   Options.XCOFFReadOnlyPointers = CodeGenOpts.XCOFFReadOnlyPointers;
+  Options.TrapUnreachable = CodeGenOpts.TrapUnreachable;
 
   switch (CodeGenOpts.getVecLib()) {
   case llvm::driver::VectorLibrary::NoLibrary:

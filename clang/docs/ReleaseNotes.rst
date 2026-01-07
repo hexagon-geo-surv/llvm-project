@@ -348,6 +348,8 @@ New Compiler Flags
 - New options for enabling allocation token instrumentation: ``-fsanitize=alloc-token``, ``-falloc-token-max=``, ``-fsanitize-alloc-token-fast-abi``, ``-fsanitize-alloc-token-extended``.
 - The ``-resource-dir`` option is now displayed in the list of options shown by ``--help``.
 - New option ``-fmatrix-memory-layout`` added to control the memory layout of Clang matrix types. (e.g. ``-fmatrix-memory-layout=column-major`` or ``-fmatrix-memory-layout=row-major``).
+- New option ``-ftrap-unreachable`` added to enable the existing backend option: TrapUnreachable.
+  This behavior is off by default (e.g. no change in the compiler's behavior) for now.
 
 Lanai Support
 ^^^^^^^^^^^^^^
