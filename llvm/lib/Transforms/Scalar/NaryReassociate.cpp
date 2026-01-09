@@ -142,6 +142,7 @@ public:
     AU.addRequired<ScalarEvolutionWrapperPass>();
     AU.addRequired<TargetLibraryInfoWrapperPass>();
     AU.addRequired<TargetTransformInfoWrapperPass>();
+    AU.addRequired<UniformityInfoWrapperPass>();
     AU.setPreservesCFG();
   }
 
@@ -160,6 +161,7 @@ INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(UniformityInfoWrapperPass)
 INITIALIZE_PASS_END(NaryReassociateLegacyPass, "nary-reassociate",
                     "Nary reassociation", false, false)
 
@@ -177,11 +179,9 @@ bool NaryReassociateLegacyPass::runOnFunction(Function &F) {
   auto *TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
   auto *TTI = &getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
 
-  // UniformityInfo is optional - only use if already computed by a prior pass.
-  UniformityInfo *UI = nullptr;
-  if (auto *UIWrapperPass =
-          getAnalysisIfAvailable<UniformityInfoWrapperPass>())
-    UI = &UIWrapperPass->getUniformityInfo();
+  // UniformityInfo is required on all targets, but on targets without branch
+  // divergence it does no work and reports everything as uniform.
+  auto *UI = &getAnalysis<UniformityInfoWrapperPass>().getUniformityInfo();
 
   return Impl.runImpl(F, AC, DT, SE, TLI, TTI, UI);
 }
@@ -194,9 +194,9 @@ PreservedAnalyses NaryReassociatePass::run(Function &F,
   auto *TLI = &AM.getResult<TargetLibraryAnalysis>(F);
   auto *TTI = &AM.getResult<TargetIRAnalysis>(F);
 
-  // UniformityInfo is optional - only available on targets that benefit from
-  // uniformity-aware reassociation (e.g., GPU targets like AMDGPU).
-  auto *UI = AM.getCachedResult<UniformityInfoAnalysis>(F);
+  // UniformityInfo is required on all targets, but on targets without branch
+  // divergence it does no work and reports everything as uniform.
+  auto *UI = &AM.getResult<UniformityInfoAnalysis>(F);
 
   if (!runImpl(F, AC, DT, SE, TLI, TTI, UI))
     return PreservedAnalyses::all();
