@@ -1380,7 +1380,30 @@ The AMDGPU backend implements the following LLVM IR intrinsics.
                                                    2: `DPP`.
                                                    If target does not support the DPP operations (e.g. gfx6/7),
                                                    reduction will be performed using default iterative strategy.
-                                                   Intrinsic is currently only implemented for i32.
+                                                   Intrinsic is implemented for i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.min                      Performs an arithmetic signed min reduction on the signed values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.fmin                     Performs an floating-point min reduction on the floating-point values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for float and double types.
+                                                   NAN values are canonicalized.
+                                                   However if there are two consecutive NAN values, and the second value is a SNAN,
+                                                   wave_mode IEEE=False propogates the SNAN, while wave_mode IEEE=True quietens it.
 
   llvm.amdgcn.wave.reduce.umax                     Performs an arithmetic unsigned max reduction on the unsigned values
                                                    provided by each lane in the wavefront.
@@ -1390,7 +1413,100 @@ The AMDGPU backend implements the following LLVM IR intrinsics.
                                                    2: `DPP`.
                                                    If target does not support the DPP operations (e.g. gfx6/7),
                                                    reduction will be performed using default iterative strategy.
-                                                   Intrinsic is currently only implemented for i32.
+                                                   Intrinsic is implemented for i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.max                      Performs an arithmetic signed max reduction on the signed values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.fmax                     Performs an floating-point max reduction on the floating-point values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for float and double types.
+                                                   NAN values are canonicalized.
+                                                   However if there are two consecutive NAN values, and the second value is a SNAN,
+                                                   wave_mode IEEE=False propogates the SNAN, while wave_mode IEEE=True quietens it.
+
+  llvm.amdgcn.wave.reduce.add                      Performs an arithmetic add reduction on the signed/unsigned values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for signed/unsigned i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.fadd                     Performs an floating-point add reduction on the floating-point values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for float and double types.
+
+  llvm.amdgcn.wave.reduce.sub                      Performs an arithmetic sub reduction on the signed/unsigned values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for signed/unsigned i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.fsub                     Performs an floating-point sub reduction on the floating-point values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for float and double types.
+
+  llvm.amdgcn.wave.reduce.and                      Performs a bitwise-and reduction on the values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.or                       Performs a bitwise-or reduction on the values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for i32 and i64 types.
+
+  llvm.amdgcn.wave.reduce.xor                      Performs a bitwise-xor reduction on the values
+                                                   provided by each lane in the wavefront.
+                                                   Intrinsic takes a hint for reduction strategy using second operand
+                                                   0: Target default preference,
+                                                   1: `Iterative strategy`, and
+                                                   2: `DPP`.
+                                                   If target does not support the DPP operations (e.g. gfx6/7),
+                                                   reduction will be performed using default iterative strategy.
+                                                   Intrinsic is implemented for i32 and i64 types.
 
   llvm.amdgcn.permlane16                           Provides direct access to v_permlane16_b32. Performs arbitrary gather-style
                                                    operation within a row (16 contiguous lanes) of the second input operand.
