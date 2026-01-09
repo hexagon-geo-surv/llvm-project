@@ -177,7 +177,13 @@ bool NaryReassociateLegacyPass::runOnFunction(Function &F) {
   auto *TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
   auto *TTI = &getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
 
-  return Impl.runImpl(F, AC, DT, SE, TLI, TTI);
+  // UniformityInfo is optional - only use if already computed by a prior pass.
+  UniformityInfo *UI = nullptr;
+  if (auto *UIWrapperPass =
+          getAnalysisIfAvailable<UniformityInfoWrapperPass>())
+    UI = &UIWrapperPass->getUniformityInfo();
+
+  return Impl.runImpl(F, AC, DT, SE, TLI, TTI, UI);
 }
 
 PreservedAnalyses NaryReassociatePass::run(Function &F,
