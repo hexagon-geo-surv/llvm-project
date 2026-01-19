@@ -358,8 +358,8 @@ private:
 
     // Create a temporary marker to simplify the op moving process below.
     builder.setInsertionPointToStart(&block);
-    auto marker = builder.create<fir::UndefOp>(builder.getUnknownLoc(),
-                                               builder.getNoneType());
+    auto marker = fir::UndefOp::create(builder, builder.getUnknownLoc(),
+                                       builder.getNoneType());
     builder.setInsertionPoint(marker);
 
     // Handle dependencies of hlfir.declare ops.
@@ -370,8 +370,8 @@ private:
       // removing them would break verifiers.
       Value zero;
       if (declareOp.getShape() || !declareOp.getTypeparams().empty())
-        zero = builder.create<arith::ConstantOp>(declareOp.getLoc(),
-                                                 builder.getI64IntegerAttr(0));
+        zero = arith::ConstantOp::create(builder, declareOp.getLoc(),
+                                         builder.getI64IntegerAttr(0));
 
       if (auto shape = declareOp.getShape()) {
         // The pre-cg rewrite pass requires the shape to be defined by one of
@@ -382,19 +382,19 @@ private:
         Value newShape =
             llvm::TypeSwitch<Operation *, Value>(shapeOp)
                 .Case([&](fir::ShapeOp op) {
-                  return builder.create<fir::ShapeOp>(op.getLoc(), extents);
+                  return fir::ShapeOp::create(builder, op.getLoc(), extents);
                 })
                 .Case([&](fir::ShapeShiftOp op) {
                   auto type = fir::ShapeShiftType::get(op.getContext(),
                                                        extents.size() / 2);
-                  return builder.create<fir::ShapeShiftOp>(op.getLoc(), type,
-                                                           extents);
+                  return fir::ShapeShiftOp::create(builder, op.getLoc(), type,
+                                                   extents);
                 })
                 .Case([&](fir::ShiftOp op) {
                   auto type =
                       fir::ShiftType::get(op.getContext(), extents.size());
-                  return builder.create<fir::ShiftOp>(op.getLoc(), type,
-                                                      extents);
+                  return fir::ShiftOp::create(builder, op.getLoc(), type,
+                                              extents);
                 })
                 .Default([](Operation *op) {
                   op->emitOpError()
@@ -439,17 +439,17 @@ private:
         // a special case here based on creating a placeholder fir.emboxchar op.
         MLIRContext *ctx = &getContext();
         fir::KindTy kind = boxCharType.getKind();
-        auto placeholder = builder.create<fir::AllocaOp>(
-            loc, fir::CharacterType::getSingleton(ctx, kind));
-        auto one = builder.create<arith::ConstantOp>(
-            loc, builder.getI32Type(), builder.getI32IntegerAttr(1));
-        rewriteValue = builder.create<fir::EmboxCharOp>(loc, boxCharType,
-                                                        placeholder, one);
+        auto placeholder = fir::AllocaOp::create(
+            builder, loc, fir::CharacterType::getSingleton(ctx, kind));
+        auto one = arith::ConstantOp::create(builder, loc, builder.getI32Type(),
+                                             builder.getI32IntegerAttr(1));
+        rewriteValue = fir::EmboxCharOp::create(builder, loc, boxCharType,
+                                                placeholder, one);
       } else {
         Value placeholder =
-            builder.create<fir::AllocaOp>(loc, builder.getI1Type());
+            fir::AllocaOp::create(builder, loc, builder.getI1Type());
         rewriteValue =
-            builder.create<fir::ConvertOp>(loc, value.getType(), placeholder);
+            fir::ConvertOp::create(builder, loc, value.getType(), placeholder);
       }
       value.replaceAllUsesWith(rewriteValue);
     }
@@ -476,9 +476,9 @@ private:
     returnValues.reserve(funcOp.getNumResults());
     for (auto type : funcOp.getResultTypes())
       returnValues.push_back(
-          builder.create<fir::UndefOp>(funcOp.getLoc(), type));
+          fir::UndefOp::create(builder, funcOp.getLoc(), type));
 
-    builder.create<func::ReturnOp>(funcOp.getLoc(), returnValues);
+    func::ReturnOp::create(builder, funcOp.getLoc(), returnValues);
 
     // Replace old region (now missing ops) with the new one and remove the
     // temporary operation clone.
