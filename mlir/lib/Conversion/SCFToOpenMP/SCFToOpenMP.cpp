@@ -486,10 +486,9 @@ struct ParallelOpLowering : public OpRewritePattern<scf::ParallelOp> {
     }
     rewriter.eraseOp(reduce);
 
-    Value numThreadsVar;
     SmallVector<Value> numThreadsVars;
     if (numThreads > 0) {
-      numThreadsVar = LLVM::ConstantOp::create(
+      Value numThreadsVar = LLVM::ConstantOp::create(
           rewriter, loc, rewriter.getI32IntegerAttr(numThreads));
       numThreadsVars.push_back(numThreadsVar);
     }

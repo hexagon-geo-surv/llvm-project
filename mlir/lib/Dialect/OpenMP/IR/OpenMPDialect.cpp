@@ -2569,16 +2569,13 @@ static LogicalResult verifyPrivateVarList(OpType &op) {
 }
 
 LogicalResult ParallelOp::verify() {
-  // verify allocate clause restrictions
   if (getAllocateVars().size() != getAllocatorVars().size())
     return emitError(
         "expected equal sizes for allocate and allocator variables");
 
-  // verify private variables restrictions
   if (failed(verifyPrivateVarList(*this)))
     return failure();
 
-  // verify reduction variables restrictions
   return verifyReductionVarList(*this, getReductionSyms(), getReductionVars(),
                                 getReductionByref());
 }
