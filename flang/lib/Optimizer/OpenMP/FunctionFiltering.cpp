@@ -40,8 +40,8 @@ using namespace mlir;
 /// the preferred location for these types of checks is), and it only checks for
 /// features that have not been implemented for target offload, but are
 /// supported on host execution.
-static void checkDeviceImplementationStatus(
-    omp::OffloadModuleInterface offloadModule) {
+static void
+checkDeviceImplementationStatus(omp::OffloadModuleInterface offloadModule) {
   if (!offloadModule.getIsGPU())
     return;
 
