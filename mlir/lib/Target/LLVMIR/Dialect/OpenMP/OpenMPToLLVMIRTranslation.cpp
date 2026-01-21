@@ -670,20 +670,6 @@ static llvm::omp::ProcBindKind getProcBindKind(omp::ClauseProcBindKind kind) {
   llvm_unreachable("Unknown ClauseProcBindKind kind");
 }
 
-/// Maps block arguments from \p blockArgIface (which are MLIR values) to the
-/// corresponding LLVM values of \p the interface's operands. This is useful
-/// when an OpenMP region with entry block arguments is converted to LLVM. In
-/// this case the block arguments are (part of) of the OpenMP region's entry
-/// arguments and the operands are (part of) of the operands to the OpenMP op
-/// containing the region.
-static void forwardArgs(LLVM::ModuleTranslation &moduleTranslation,
-                        omp::BlockArgOpenMPOpInterface blockArgIface) {
-  llvm::SmallVector<std::pair<Value, BlockArgument>> blockArgsPairs;
-  blockArgIface.getBlockArgsPairs(blockArgsPairs);
-  for (auto [var, arg] : blockArgsPairs)
-    moduleTranslation.mapValue(arg, moduleTranslation.lookupValue(var));
-}
-
 /// Converts an OpenMP 'masked' operation into LLVM IR using OpenMPIRBuilder.
 static LogicalResult
 convertOmpMasked(Operation &opInst, llvm::IRBuilderBase &builder,
