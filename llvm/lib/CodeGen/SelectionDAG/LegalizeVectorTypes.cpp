@@ -1660,7 +1660,6 @@ void DAGTypeLegalizer::SplitVecRes_BITCAST(SDNode *N, SDValue &Lo,
   switch (getTypeAction(InVT)) {
   case TargetLowering::TypeLegal:
   case TargetLowering::TypePromoteInteger:
-  case TargetLowering::TypePromoteFloat:
   case TargetLowering::TypeSoftPromoteHalf:
   case TargetLowering::TypeSoftenFloat:
   case TargetLowering::TypeScalarizeVector:
@@ -6022,7 +6021,6 @@ SDValue DAGTypeLegalizer::WidenVecRes_BITCAST(SDNode *N) {
     break;
   }
   case TargetLowering::TypeSoftenFloat:
-  case TargetLowering::TypePromoteFloat:
   case TargetLowering::TypeSoftPromoteHalf:
   case TargetLowering::TypeExpandInteger:
   case TargetLowering::TypeExpandFloat:
