@@ -366,6 +366,9 @@ private:
     for (hlfir::DeclareOp declareOp : declareOps) {
       collectRewrite(declareOp.getMemref(), rewriteValues);
 
+      if (declareOp.getStorage())
+        collectRewrite(declareOp.getStorage(), rewriteValues);
+
       // Shape and typeparams aren't needed for target device codegen, but
       // removing them would break verifiers.
       Value zero;
@@ -416,20 +419,20 @@ private:
     }
 
     // We don't actually need the proper initialization, but rather just
-    // maintain the basic form of these operands. We create 1-bit placeholder
-    // allocas that we "typecast" to the expected type and replace all uses.
-    // Using fir.undefined here instead is not possible because these variables
-    // cannot be constants, as that would trigger different codegen for target
-    // regions.
+    // maintain the basic form of these operands. Generally, we create 1-bit
+    // placeholder allocas that we "typecast" to the expected type and replace
+    // all uses. Using fir.undefined here instead is not possible because these
+    // variables cannot be constants, as that would trigger different codegen
+    // for target regions.
     for (Value value : rewriteValues) {
       Location loc = value.getLoc();
       Value rewriteValue;
-      // If it's defined by fir.address_of, then we need to keep that op as
-      // well because it might be pointing to a 'declare target' global.
-      // Constants can also trigger different codegen paths, so we keep them as
-      // well.
       if (isa_and_present<arith::ConstantOp, fir::AddrOfOp>(
               value.getDefiningOp())) {
+        // If it's defined by fir.address_of, then we need to keep that op as
+        // well because it might be pointing to a 'declare target' global.
+        // Constants can also trigger different codegen paths, so we keep them
+        // as well.
         rewriteValue = builder.clone(*value.getDefiningOp())->getResult(0);
       } else if (auto boxCharType =
                      dyn_cast<fir::BoxCharType>(value.getType())) {

@@ -454,6 +454,43 @@ module attributes {omp.is_target_device = true} {
     return
   }
 
+  // CHECK-LABEL: func.func @assumed_length
+  // CHECK-SAME: (%[[ARG:.*]]: !fir.boxchar<1>)
+  func.func @assumed_length(%arg: !fir.boxchar<1>) {
+    // CHECK-NEXT: %[[PLACEHOLDER:.*]] = fir.alloca !fir.char<1>
+    // CHECK-NEXT: %[[ONE:.*]] = arith.constant 1 : i32
+    // CHECK-NEXT: %[[EMBOXCHAR:.*]] = fir.emboxchar %[[PLACEHOLDER]], %[[ONE]] : (!fir.ref<!fir.char<1>>, i32) -> !fir.boxchar<1>
+    // CHECK-NEXT: omp.target private(@boxchar_firstprivatizer %[[EMBOXCHAR]] -> %{{.*}} [map_idx=0] : !fir.boxchar<1>)
+    %0 = fir.alloca !fir.boxchar<1>
+    %1 = fir.dummy_scope : !fir.dscope
+    %2:2 = fir.unboxchar %arg : (!fir.boxchar<1>) -> (!fir.ref<!fir.char<1,?>>, index)
+    %3:2 = hlfir.declare %2#0 typeparams %2#1 dummy_scope %1 {uniq_name = "arg"} : (!fir.ref<!fir.char<1,?>>, index, !fir.dscope) -> (!fir.boxchar<1>, !fir.ref<!fir.char<1,?>>)
+    omp.target private(@boxchar_firstprivatizer %3#0 -> %arg3 [map_idx=0] : !fir.boxchar<1>) {
+      omp.terminator
+    }
+    return
+  }
+
+  // CHECK-LABEL: func.func @hlfir_storage
+  func.func @hlfir_storage(%i : index) {
+    // CHECK-NEXT: %[[PLACEHOLDER:.*]] = fir.alloca i1
+    // CHECK-NEXT: %[[VAR:.*]] = fir.convert %[[PLACEHOLDER]] : (!fir.ref<i1>) -> !fir.ref<i32>
+    // CHECK-NEXT: %[[GLOBAL:.*]] = fir.address_of(@block_) : !fir.ref<!fir.array<8xi8>>
+    %0 = fir.address_of(@block_) : !fir.ref<!fir.array<8xi8>>
+    %1 = fir.convert %0 : (!fir.ref<!fir.array<8xi8>>) -> !fir.ref<!fir.array<?xi8>>
+    %2 = fir.coordinate_of %1, %i : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+    %3 = fir.convert %2 : (!fir.ref<i8>) -> !fir.ref<i32>
+    // CHECK-NEXT: %[[DECL:.*]]:2 = hlfir.declare %[[VAR]] storage(%[[GLOBAL]][0])
+    %4:2 = hlfir.declare %3 storage (%0[0]) {uniq_name = "a"} : (!fir.ref<i32>, !fir.ref<!fir.array<8xi8>>) -> (!fir.ref<i32>, !fir.ref<i32>)
+    // CHECK-NEXT: %[[MAP:.*]] = omp.map.info var_ptr(%[[DECL]]#1 : !fir.ref<i32>, i32) map_clauses(tofrom) capture(ByRef) -> !fir.ref<i32>
+    %map = omp.map.info var_ptr(%4#1 : !fir.ref<i32>, i32) map_clauses(tofrom) capture(ByRef) -> !fir.ref<i32>
+    // CHECK-NEXT: omp.target map_entries(%[[MAP]] -> %{{.*}} : !fir.ref<i32>)
+    omp.target map_entries(%map -> %arg0 : !fir.ref<i32>) {
+      omp.terminator
+    }
+    return
+  }
+
   func.func private @foo() -> () attributes {omp.declare_target = #omp.declaretarget<device_type = (any), capture_clause = (enter)>}
   fir.global internal @global_scalar constant : i32 {
     %0 = arith.constant 10 : i32
