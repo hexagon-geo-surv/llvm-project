@@ -4708,6 +4708,9 @@ Instruction *InstCombinerImpl::visitSelectInst(SelectInst &SI) {
           And = Builder.CreateLogicalAnd(CondVal, TrueSI->getCondition(), "",
                                          ProfcheckDisableMetadataFixes ? nullptr
                                                                        : &SI);
+          if (!ProfcheckDisableMetadataFixes)
+            if (auto *I = dyn_cast<Instruction>(And))
+              setExplicitlyUnknownBranchWeightsIfProfiled(*I, DEBUG_TYPE, &F);
           OtherVal = TrueSI->getTrueValue();
         }
         // select(C0, select(C1, b, a), b) -> select(C0&&!C1, a, b)
@@ -4716,6 +4719,9 @@ Instruction *InstCombinerImpl::visitSelectInst(SelectInst &SI) {
           And = Builder.CreateLogicalAnd(CondVal, InvertedCond, "",
                                          ProfcheckDisableMetadataFixes ? nullptr
                                                                        : &SI);
+          if (!ProfcheckDisableMetadataFixes)
+            if (auto *I = dyn_cast<Instruction>(And))
+              setExplicitlyUnknownBranchWeightsIfProfiled(*I, DEBUG_TYPE, &F);
           OtherVal = TrueSI->getFalseValue();
         }
         if (And && OtherVal) {
@@ -4743,6 +4749,9 @@ Instruction *InstCombinerImpl::visitSelectInst(SelectInst &SI) {
           Or = Builder.CreateLogicalOr(CondVal, FalseSI->getCondition(), "",
                                        ProfcheckDisableMetadataFixes ? nullptr
                                                                      : &SI);
+          if (!ProfcheckDisableMetadataFixes)
+            if (auto *I = dyn_cast<Instruction>(Or))
+              setExplicitlyUnknownBranchWeightsIfProfiled(*I, DEBUG_TYPE, &F);
           OtherVal = FalseSI->getFalseValue();
         }
         // select(C0, a, select(C1, b, a)) -> select(C0||!C1, a, b)
@@ -4751,6 +4760,9 @@ Instruction *InstCombinerImpl::visitSelectInst(SelectInst &SI) {
           Or = Builder.CreateLogicalOr(CondVal, InvertedCond, "",
                                        ProfcheckDisableMetadataFixes ? nullptr
                                                                      : &SI);
+          if (!ProfcheckDisableMetadataFixes)
+            if (auto *I = dyn_cast<Instruction>(Or))
+              setExplicitlyUnknownBranchWeightsIfProfiled(*I, DEBUG_TYPE, &F);
           OtherVal = FalseSI->getTrueValue();
         }
         if (Or && OtherVal) {
