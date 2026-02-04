@@ -44,7 +44,10 @@ def ValueSemantics : NativeTypeTrait<"ValueSemantics"> {
 // ComplexType
 //===----------------------------------------------------------------------===//
 
-def Builtin_Complex : Builtin_Type<"Complex", "complex"> {
+def Builtin_Complex : Builtin_Type<"Complex", "complex",
+    [DeclareTypeInterfaceMethods<DenseElementTypeInterface,
+      ["getDenseElementBitSize", "convertToAttribute", "convertFromAttribute"]>
+    ]> {
   let summary = "Complex number with a parameterized element type";
   let description = [{
     Syntax:
@@ -470,7 +473,9 @@ def Builtin_Graph : Builtin_FunctionLike<"Graph", "graph">;
 //===----------------------------------------------------------------------===//
 
 def Builtin_Index : Builtin_Type<"Index", "index",
-    [VectorElementTypeInterface]> {
+    [DeclareTypeInterfaceMethods<DenseElementTypeInterface,
+      ["getDenseElementBitSize", "convertToAttribute", "convertFromAttribute"]>,
+     VectorElementTypeInterface]> {
   let summary = "Integer-like type with unknown platform-dependent bit width";
   let description = [{
     Syntax:
@@ -501,7 +506,9 @@ def Builtin_Index : Builtin_Type<"Index", "index",
 //===----------------------------------------------------------------------===//
 
 def Builtin_Integer : Builtin_Type<"Integer", "integer",
-    [VectorElementTypeInterface]> {
+    [DeclareTypeInterfaceMethods<DenseElementTypeInterface,
+      ["getDenseElementBitSize", "convertToAttribute", "convertFromAttribute"]>,
+     VectorElementTypeInterface]> {
   let summary = "Integer type with arbitrary precision up to a fixed limit";
   let description = [{
     Syntax:

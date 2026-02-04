@@ -513,12 +513,10 @@ def TestTypeNewlineAndIndent : Test_Type<"TestTypeNewlineAndIndent"> {
   let hasCustomAssemblyFormat = 1;
 }
 
-//===----------------------------------------------------------------------===//
-// Test type for DenseElementTypeInterface
-//===----------------------------------------------------------------------===//
-
 def TestTypeDenseElement : Test_Type<"TestDenseElement",
-    [DeclareTypeInterfaceMethods<DenseElementTypeInterface>]> {
+    [DeclareTypeInterfaceMethods<DenseElementTypeInterface,
+      ["getDenseElementBitSize", "convertToAttribute", "convertFromAttribute"]>
+    ]> {
   let mnemonic = "dense_element";
   let description = [{
     A test type that implements DenseElementTypeInterface to test dense

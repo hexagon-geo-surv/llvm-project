@@ -19,6 +19,26 @@ struct fltSemantics;
 namespace mlir {
 class FloatType;
 class MLIRContext;
+
+namespace detail {
+/// Default implementation of DenseElementTypeInterface::getDenseElementBitSize.
+size_t getDefaultDenseElementBitSize(Type type);
+
+/// Default implementation of DenseElementTypeInterface::convertToAttribute.
+Attribute defaultConvertToAttribute(Type type, llvm::ArrayRef<char> rawData);
+
+/// Default implementation of DenseElementTypeInterface::convertFromAttribute.
+LogicalResult defaultConvertFromAttribute(Type type, Attribute attr,
+                                          llvm::SmallVectorImpl<char> &result);
+
+/// Read `bitWidth` bits from byte-aligned position in `rawData` and return as
+/// an APInt. Handles endianness correctly.
+llvm::APInt readBits(const char *rawData, size_t bitPos, size_t bitWidth);
+
+/// Write `value` to byte-aligned position `bitPos` in `rawData`. Handles
+/// endianness correctly.
+void writeBits(char *rawData, size_t bitPos, llvm::APInt value);
+} // namespace detail
 } // namespace mlir
 
 #include "mlir/IR/BuiltinTypeInterfaces.h.inc"

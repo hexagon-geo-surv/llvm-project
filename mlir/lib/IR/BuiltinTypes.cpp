@@ -18,9 +18,11 @@
 #include "mlir/IR/TensorEncoding.h"
 #include "mlir/IR/TypeUtilities.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Sequence.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/CheckedArithmetic.h"
+#include <cstring>
 
 using namespace mlir;
 using namespace mlir::detail;
@@ -84,6 +86,125 @@ IntegerType IntegerType::scaleElementBitwidth(unsigned scale) {
   if (!scale)
     return IntegerType();
   return IntegerType::get(getContext(), scale * getWidth(), getSignedness());
+}
+
+size_t IntegerType::getDenseElementBitSize() const {
+  // Return the actual bit width. Storage alignment is handled separately.
+  // Note: i1 is bit-packed and should be special-cased by the caller.
+  return getWidth();
+}
+
+Attribute IntegerType::convertToAttribute(ArrayRef<char> rawData) const {
+  APInt value = detail::readBits(rawData.data(), /*bitPos=*/0, getWidth());
+  return IntegerAttr::get(*this, value);
+}
+
+LogicalResult
+IntegerType::convertFromAttribute(Attribute attr,
+                                  SmallVectorImpl<char> &result) const {
+  auto intAttr = dyn_cast<IntegerAttr>(attr);
+  if (!intAttr || intAttr.getType() != *this)
+    return failure();
+
+  size_t byteSize = llvm::divideCeil(getDenseElementBitSize(), CHAR_BIT);
+  size_t bitPos = result.size() * CHAR_BIT;
+  result.resize(result.size() + byteSize);
+  detail::writeBits(result.data(), bitPos, intAttr.getValue());
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// Index Type
+//===----------------------------------------------------------------------===//
+
+size_t IndexType::getDenseElementBitSize() const {
+  return kInternalStorageBitWidth;
+}
+
+Attribute IndexType::convertToAttribute(ArrayRef<char> rawData) const {
+  APInt value =
+      detail::readBits(rawData.data(), /*bitPos=*/0, kInternalStorageBitWidth);
+  return IntegerAttr::get(*this, value);
+}
+
+LogicalResult
+IndexType::convertFromAttribute(Attribute attr,
+                                SmallVectorImpl<char> &result) const {
+  auto intAttr = dyn_cast<IntegerAttr>(attr);
+  if (!intAttr || intAttr.getType() != *this)
+    return failure();
+
+  size_t byteSize = kInternalStorageBitWidth / CHAR_BIT;
+  size_t bitPos = result.size() * CHAR_BIT;
+  result.resize(result.size() + byteSize);
+  detail::writeBits(result.data(), bitPos, intAttr.getValue());
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// Complex Type
+//===----------------------------------------------------------------------===//
+
+size_t ComplexType::getDenseElementBitSize() const {
+  Type eltType = getElementType();
+  if (auto intType = dyn_cast<IntegerType>(eltType))
+    return 2 * llvm::alignTo<CHAR_BIT>(intType.getWidth());
+  return 2 * cast<FloatType>(eltType).getWidth();
+}
+
+Attribute ComplexType::convertToAttribute(ArrayRef<char> rawData) const {
+  Type eltType = getElementType();
+  size_t bitWidth = getDenseElementBitSize() / 2;
+
+  if (auto intType = dyn_cast<IntegerType>(eltType)) {
+    APInt realVal = detail::readBits(rawData.data(), /*bitPos=*/0, bitWidth);
+    APInt imagVal = detail::readBits(rawData.data(), bitWidth, bitWidth);
+    auto real = IntegerAttr::get(eltType, realVal);
+    auto imag = IntegerAttr::get(eltType, imagVal);
+    return ArrayAttr::get(getContext(), {real, imag});
+  }
+
+  auto floatType = cast<FloatType>(eltType);
+  const auto &semantics = floatType.getFloatSemantics();
+  APInt realVal = detail::readBits(rawData.data(), /*bitPos=*/0, bitWidth);
+  APInt imagVal = detail::readBits(rawData.data(), bitWidth, bitWidth);
+  auto real = FloatAttr::get(eltType, APFloat(semantics, realVal));
+  auto imag = FloatAttr::get(eltType, APFloat(semantics, imagVal));
+  return ArrayAttr::get(getContext(), {real, imag});
+}
+
+LogicalResult
+ComplexType::convertFromAttribute(Attribute attr,
+                                  SmallVectorImpl<char> &result) const {
+  auto arrayAttr = dyn_cast<ArrayAttr>(attr);
+  if (!arrayAttr || arrayAttr.size() != 2)
+    return failure();
+
+  Type eltType = getElementType();
+  size_t bitWidth = getDenseElementBitSize() / 2;
+  size_t byteSize = llvm::divideCeil(bitWidth, (size_t)CHAR_BIT);
+  size_t bitPos = result.size() * CHAR_BIT;
+  result.resize(result.size() + 2 * byteSize);
+
+  if (auto intType = dyn_cast<IntegerType>(eltType)) {
+    auto realAttr = dyn_cast<IntegerAttr>(arrayAttr[0]);
+    auto imagAttr = dyn_cast<IntegerAttr>(arrayAttr[1]);
+    if (!realAttr || !imagAttr)
+      return failure();
+    detail::writeBits(result.data(), bitPos, realAttr.getValue());
+    detail::writeBits(result.data(), bitPos + bitWidth, imagAttr.getValue());
+    return success();
+  }
+
+  auto realAttr = dyn_cast<FloatAttr>(arrayAttr[0]);
+  auto imagAttr = dyn_cast<FloatAttr>(arrayAttr[1]);
+  if (!realAttr || !imagAttr)
+    return failure();
+  detail::writeBits(result.data(), bitPos,
+                    realAttr.getValue().bitcastToAPInt());
+  detail::writeBits(result.data(), bitPos + bitWidth,
+                    imagAttr.getValue().bitcastToAPInt());
+  return success();
 }
 
 //===----------------------------------------------------------------------===//

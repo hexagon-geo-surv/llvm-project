@@ -507,15 +507,17 @@ protected:
   /// Print a dense string elements attribute.
   void printDenseStringElementsAttr(DenseStringElementsAttr attr);
 
-  /// Print a dense elements attribute. If 'allowHex' is true, a hex string is
-  /// used instead of individual elements when the elements attr is large.
+  /// Print a dense elements attribute in the literal-first syntax. If
+  /// 'allowHex' is true, a hex string is used instead of individual elements
+  /// when the elements attr is large.
   void printDenseIntOrFPElementsAttr(DenseIntOrFPElementsAttr attr,
                                      bool allowHex);
 
-  /// Print a dense elements attribute using DenseElementTypeInterface.
-  /// Uses the type-first syntax: dense<TYPE : [ATTR, ...]>
-  void printDenseElementsAttrWithInterface(DenseElementsAttr attr,
-                                           DenseElementType denseEltType);
+  /// Print a dense elements attribute using the type-first syntax and the
+  /// DenseElementTypeInterface, which provides the attribute printer for each
+  /// element.
+  void printTypeFirstDenseElementsAttr(DenseElementsAttr attr,
+                                       DenseElementType denseEltType);
 
   /// Print a dense array attribute.
   void printDenseArrayAttr(DenseArrayAttr attr);
@@ -2506,41 +2508,33 @@ void AsmPrinter::Impl::printAttributeImpl(Attribute attr,
       printSymbolReference(nestedRef.getValue(), os);
     }
 
-  } else if (auto denseEltAttr = llvm::dyn_cast<DenseElementsAttr>(attr)) {
-    // Check if the element type implements DenseElementTypeInterface.
-    // If so, use the type-first syntax which embeds the type in the attribute.
-    Type eltType = denseEltAttr.getElementType();
-    if (auto denseEltType = llvm::dyn_cast<DenseElementType>(eltType)) {
-      if (printerFlags.shouldElideElementsAttr(denseEltAttr)) {
-        printElidedElementsAttr(os);
+  } else if (auto intOrFpEltAttr =
+                 llvm::dyn_cast<DenseIntOrFPElementsAttr>(attr)) {
+    if (printerFlags.shouldElideElementsAttr(intOrFpEltAttr)) {
+      printElidedElementsAttr(os);
+    } else {
+      os << "dense<";
+      // Check if the element type implements DenseElementTypeInterface and is
+      // not a built-in type. Built-in types (int, float, index, complex) use
+      // the existing printing format for backwards compatibility.
+      Type eltType = intOrFpEltAttr.getElementType();
+      if (isa<FloatType, IntegerType, IndexType, ComplexType>(eltType)) {
+        printDenseIntOrFPElementsAttr(intOrFpEltAttr, /*allowHex=*/true);
       } else {
-        os << "dense<";
-        printDenseElementsAttrWithInterface(denseEltAttr, denseEltType);
-        os << '>';
+        printTypeFirstDenseElementsAttr(intOrFpEltAttr,
+                                        cast<DenseElementType>(eltType));
+        typeElision = AttrTypeElision::Must;
       }
-      // Type is embedded in the syntax, don't print it again.
-      return;
+      os << '>';
     }
 
-    // Fall back to existing printing for built-in element types.
-    if (auto intOrFpEltAttr =
-            llvm::dyn_cast<DenseIntOrFPElementsAttr>(denseEltAttr)) {
-      if (printerFlags.shouldElideElementsAttr(intOrFpEltAttr)) {
-        printElidedElementsAttr(os);
-      } else {
-        os << "dense<";
-        printDenseIntOrFPElementsAttr(intOrFpEltAttr, /*allowHex=*/true);
-        os << '>';
-      }
-    } else if (auto strEltAttr =
-                   llvm::dyn_cast<DenseStringElementsAttr>(denseEltAttr)) {
-      if (printerFlags.shouldElideElementsAttr(strEltAttr)) {
-        printElidedElementsAttr(os);
-      } else {
-        os << "dense<";
-        printDenseStringElementsAttr(strEltAttr);
-        os << '>';
-      }
+  } else if (auto strEltAttr = llvm::dyn_cast<DenseStringElementsAttr>(attr)) {
+    if (printerFlags.shouldElideElementsAttr(strEltAttr)) {
+      printElidedElementsAttr(os);
+    } else {
+      os << "dense<";
+      printDenseStringElementsAttr(strEltAttr);
+      os << '>';
     }
 
   } else if (auto sparseEltAttr = llvm::dyn_cast<SparseElementsAttr>(attr)) {
@@ -2728,14 +2722,16 @@ void AsmPrinter::Impl::printDenseStringElementsAttr(
   printDenseElementsAttrImpl(attr.isSplat(), attr.getType(), os, printFn);
 }
 
-void AsmPrinter::Impl::printDenseElementsAttrWithInterface(
+void AsmPrinter::Impl::printTypeFirstDenseElementsAttr(
     DenseElementsAttr attr, DenseElementType denseEltType) {
   // Print the type first: dense<TYPE : [ELEMENTS]>
   printType(attr.getType());
   os << " : ";
 
   ArrayRef<char> rawData = attr.getRawData();
-  size_t byteSize = denseEltType.getDenseElementBitSize() / CHAR_BIT;
+  // Storage is byte-aligned: align bit size up to next byte boundary.
+  size_t bitSize = denseEltType.getDenseElementBitSize();
+  size_t byteSize = llvm::divideCeil(bitSize, (size_t)CHAR_BIT);
 
   // Print elements: convert raw bytes to attribute, then print attribute.
   printDenseElementsAttrImpl(

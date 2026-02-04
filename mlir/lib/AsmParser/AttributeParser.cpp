@@ -957,12 +957,12 @@ Attribute Parser::parseDenseArrayAttr(Type attrType) {
 
 /// Try to parse a dense elements attribute with the type-first syntax.
 /// Syntax: dense<TYPE : [ATTR, ATTR, ...]>
-/// This is used for element types implementing DenseElementTypeInterface.
+/// This syntax is used for types other than int, float, index and complex.
 ///
 /// Returns:
-///   - failure() on parse error
-///   - Attribute() (null) if this is not the type-first syntax
-///   - A valid Attribute on success
+///   - "null" attribute if this is not the type-first syntax.
+///   - "failure" in case of a parse error.
+///   - A valid Attribute otherwise.
 static FailureOr<Attribute> parseDenseElementsAttrTyped(Parser &p, SMLoc loc) {
   // Try to parse an optional type. Skip l_paren because parseOptionalType
   // would try to parse it as a tuple/function type, but '(' starts a complex
@@ -1010,7 +1010,11 @@ static FailureOr<Attribute> parseDenseElementsAttrTyped(Parser &p, SMLoc loc) {
 
   // Parse the element attributes and convert to raw bytes.
   SmallVector<char> rawData;
-  size_t byteSize = denseEltType.getDenseElementBitSize() / CHAR_BIT;
+  // Storage is byte-aligned: align bit size up to next byte boundary. This
+  // limitation could be lifted in the future to support dense packing of
+  // non-byte-sized elements.
+  size_t bitSize = denseEltType.getDenseElementBitSize();
+  size_t byteSize = llvm::divideCeil(bitSize, static_cast<size_t>(CHAR_BIT));
 
   // Helper to parse a single element.
   auto parseSingleElement = [&]() -> ParseResult {
@@ -1032,7 +1036,7 @@ static FailureOr<Attribute> parseDenseElementsAttrTyped(Parser &p, SMLoc loc) {
       return parseSingleElement();
 
     // Non-leaf: expect a list with the correct number of elements.
-    int64_t expectedCount = remainingShape[0];
+    int64_t expectedCount = remainingShape.front();
     ArrayRef<int64_t> innerShape = remainingShape.drop_front();
     int64_t actualCount = 0;
 
@@ -1094,7 +1098,6 @@ Attribute Parser::parseDenseElementsAttr(Type attrType) {
     return nullptr;
 
   // Try to parse the type-first syntax: dense<TYPE : [ATTR, ...]>
-  // This is used for element types implementing DenseElementTypeInterface.
   FailureOr<Attribute> typedResult =
       parseDenseElementsAttrTyped(*this, attribLoc);
   if (failed(typedResult))
@@ -1102,7 +1105,8 @@ Attribute Parser::parseDenseElementsAttr(Type attrType) {
   if (*typedResult)
     return *typedResult;
 
-  // Parse the literal data if necessary (old syntax: dense<LITERAL> : TYPE).
+  // Try to parse the literal-first syntax, which is the default format for
+  // int, float, index and complex element types.
   TensorLiteralParser literalParser(*this);
   if (!consumeIf(Token::greater)) {
     if (literalParser.parse(/*allowHex=*/true) ||
@@ -1110,10 +1114,10 @@ Attribute Parser::parseDenseElementsAttr(Type attrType) {
       return nullptr;
   }
 
-  auto literalType = parseElementsLiteralType(attribLoc, attrType);
-  if (!literalType)
+  auto type = parseElementsLiteralType(attribLoc, attrType);
+  if (!type)
     return nullptr;
-  return literalParser.getAttr(attribLoc, literalType);
+  return literalParser.getAttr(attribLoc, type);
 }
 
 Attribute Parser::parseDenseResourceElementsAttr(Type attrType) {
