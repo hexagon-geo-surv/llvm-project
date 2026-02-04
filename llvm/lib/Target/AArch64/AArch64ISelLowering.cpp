@@ -20557,11 +20557,11 @@ tryToReplaceScalarFPConversionWithSVE(SDNode *N, SelectionDAG &DAG,
   if (DCI.isBeforeLegalizeOps())
     return SDValue();
 
-  if (N->getOpcode() == ISD::FP_TO_SINT_SAT ||
-      N->getOpcode() == ISD::FP_TO_UINT_SAT)
+  if (Subtarget->hasFPRCVT())
     return SDValue();
 
-  if (Subtarget->isStreaming() && Subtarget->hasFPRCVT())
+  if (N->getOpcode() == ISD::FP_TO_SINT_SAT ||
+      N->getOpcode() == ISD::FP_TO_UINT_SAT)
     return SDValue();
 
   if (!Subtarget->isSVEorStreamingSVEAvailable() ||
