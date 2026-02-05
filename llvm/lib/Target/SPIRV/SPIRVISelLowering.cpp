@@ -143,6 +143,9 @@ SPIRVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
 
 inline Register getTypeReg(MachineRegisterInfo *MRI, Register OpReg) {
   SPIRVType *TypeInst = MRI->getVRegDef(OpReg);
+  assert(!SPIRVTypeInst::definesATypeRegister(TypeInst) &&
+         "The TypeInst is never a type, because this function doesn't make any "
+         "sense");
   return TypeInst && TypeInst->getOpcode() == SPIRV::OpFunctionParameter
              ? TypeInst->getOperand(1).getReg()
              : OpReg;
