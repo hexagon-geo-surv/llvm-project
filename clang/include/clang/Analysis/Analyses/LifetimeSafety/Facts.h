@@ -14,15 +14,16 @@
 #ifndef LLVM_CLANG_ANALYSIS_ANALYSES_LIFETIMESAFETY_FACTS_H
 #define LLVM_CLANG_ANALYSIS_ANALYSES_LIFETIMESAFETY_FACTS_H
 
+#include <cstdint>
+#include <optional>
+
 #include "clang/Analysis/Analyses/LifetimeSafety/Loans.h"
 #include "clang/Analysis/Analyses/LifetimeSafety/Origins.h"
 #include "clang/Analysis/Analyses/LifetimeSafety/Utils.h"
 #include "clang/Analysis/AnalysisDeclContext.h"
 #include "clang/Analysis/CFG.h"
-#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
-#include <cstdint>
 
 namespace clang::lifetimes::internal {
 
@@ -123,19 +124,24 @@ class OriginFlowFact : public Fact {
   // True if the destination origin should be killed (i.e., its current loans
   // cleared) before the source origin's loans are flowed into it.
   bool KillDest;
+  // If set, the source origin's loans are extended by this path element before
+  // flowing into the destination.
+  std::optional<PathElement> Element;
 
 public:
   static bool classof(const Fact *F) {
     return F->getKind() == Kind::OriginFlow;
   }
 
-  OriginFlowFact(OriginID OIDDest, OriginID OIDSrc, bool KillDest)
+  OriginFlowFact(OriginID OIDDest, OriginID OIDSrc, bool KillDest,
+                 std::optional<PathElement> Element = std::nullopt)
       : Fact(Kind::OriginFlow), OIDDest(OIDDest), OIDSrc(OIDSrc),
-        KillDest(KillDest) {}
+        KillDest(KillDest), Element(Element) {}
 
   OriginID getDestOriginID() const { return OIDDest; }
   OriginID getSrcOriginID() const { return OIDSrc; }
   bool getKillDest() const { return KillDest; }
+  std::optional<PathElement> getPathElement() const { return Element; }
 
   void dump(llvm::raw_ostream &OS, const LoanManager &,
             const OriginManager &OM) const override;

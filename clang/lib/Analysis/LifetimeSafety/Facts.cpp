@@ -9,8 +9,6 @@
 #include "clang/Analysis/Analyses/LifetimeSafety/Facts.h"
 #include "clang/AST/Decl.h"
 #include "clang/Analysis/Analyses/PostOrderCFGView.h"
-#include "clang/Analysis/FlowSensitive/DataflowWorklist.h"
-#include "llvm/ADT/STLFunctionalExtras.h"
 
 namespace clang::lifetimes::internal {
 
@@ -44,6 +42,10 @@ void OriginFlowFact::dump(llvm::raw_ostream &OS, const LoanManager &,
   OS << "\tSrc:  ";
   OM.dump(getSrcOriginID(), OS);
   OS << (getKillDest() ? "" : ", Merge");
+  if (auto Path = getPathElement()) {
+    OS << "\n\tAdd path: ";
+    Path->dump(OS);
+  }
   OS << "\n";
 }
 

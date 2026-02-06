@@ -125,12 +125,12 @@ public:
     };
     for (LoanID LID : EscapedLoans) {
       const Loan *L = FactMgr.getLoanMgr().getLoan(LID);
-      const auto *PL = dyn_cast<PlaceholderLoan>(L);
-      if (!PL)
+      const PlaceholderBase *PB = L->getAccessPath().getAsPlaceholderBase();
+      if (!PB)
         continue;
-      if (const auto *PVD = PL->getParmVarDecl())
+      if (const auto *PVD = PB->getParmVarDecl())
         CheckParam(PVD);
-      else if (const auto *MD = PL->getMethodDecl())
+      else if (const auto *MD = PB->getMethodDecl())
         CheckImplicitThis(MD);
     }
   }
@@ -147,40 +147,34 @@ public:
   /// liveness. Future enhancements could also consider the confidence of loan
   /// propagation (e.g., a loan may only be held on some execution paths).
   void checkExpiry(const ExpireFact *EF) {
-    LoanID ExpiredLoan = EF->getLoanID();
-    const Expr *MovedExpr = nullptr;
-    if (auto *ME = MovedLoans.getMovedLoans(EF).lookup(ExpiredLoan))
-      MovedExpr = *ME;
+    LoanID ExpiredLoanID = EF->getLoanID();
+    const Loan *ExpiredLoan = FactMgr.getLoanMgr().getLoan(ExpiredLoanID);
 
     LivenessMap Origins = LiveOrigins.getLiveOriginsAt(EF);
-    Confidence CurConfidence = Confidence::None;
-    // The UseFact or OriginEscapesFact most indicative of a lifetime error,
-    // prioritized by earlier source location.
-    llvm::PointerUnion<const UseFact *, const OriginEscapesFact *>
-        BestCausingFact = nullptr;
 
     for (auto &[OID, LiveInfo] : Origins) {
       LoanSet HeldLoans = LoanPropagation.getLoans(OID, EF);
-      if (!HeldLoans.contains(ExpiredLoan))
-        continue;
-      // Loan is defaulted.
-      Confidence NewConfidence = livenessKindToConfidence(LiveInfo.Kind);
-      if (CurConfidence < NewConfidence) {
-        CurConfidence = NewConfidence;
-        BestCausingFact = LiveInfo.CausingFact;
+      for (LoanID HeldLoanID : HeldLoans) {
+        const Loan *HeldLoan = FactMgr.getLoanMgr().getLoan(HeldLoanID);
+
+        if (ExpiredLoan->getAccessPath().isPrefixOf(HeldLoan->getAccessPath())) {
+          // HeldLoan is expired because its base or itself is expired.
+          const Expr *MovedExpr = nullptr;
+          if (auto *ME = MovedLoans.getMovedLoans(EF).lookup(HeldLoanID))
+            MovedExpr = *ME;
+
+          Confidence NewConfidence = livenessKindToConfidence(LiveInfo.Kind);
+          Confidence LastConf =
+              FinalWarningsMap.lookup(HeldLoanID).ConfidenceLevel;
+          if (LastConf >= NewConfidence)
+            continue;
+
+          FinalWarningsMap[HeldLoanID] = {EF->getExpiryLoc(),
+                                          LiveInfo.CausingFact, MovedExpr,
+                                          nullptr, NewConfidence};
+        }
       }
     }
-    if (!BestCausingFact)
-      return;
-    // We have a use-after-free.
-    Confidence LastConf = FinalWarningsMap.lookup(ExpiredLoan).ConfidenceLevel;
-    if (LastConf >= CurConfidence)
-      return;
-    FinalWarningsMap[ExpiredLoan] = {/*ExpiryLoc=*/EF->getExpiryLoc(),
-                                     /*BestCausingFact=*/BestCausingFact,
-                                     /*MovedExpr=*/MovedExpr,
-                                     /*InvalidatedByExpr=*/nullptr,
-                                     /*ConfidenceLevel=*/CurConfidence};
   }
 
   /// Checks for use-after-invalidation errors when a container is modified.
@@ -194,18 +188,9 @@ public:
     LoanSet DirectlyInvalidatedLoans =
         LoanPropagation.getLoans(InvalidatedOrigin, IOF);
     auto IsInvalidated = [&](const Loan *L) {
-      auto *PathL = dyn_cast<PathLoan>(L);
-      auto *PlaceholderL = dyn_cast<PlaceholderLoan>(L);
       for (LoanID InvalidID : DirectlyInvalidatedLoans) {
-        const Loan *L = FactMgr.getLoanMgr().getLoan(InvalidID);
-        auto *InvalidPathL = dyn_cast<PathLoan>(L);
-        auto *InvalidPlaceholderL = dyn_cast<PlaceholderLoan>(L);
-        if (PathL && InvalidPathL &&
-            PathL->getAccessPath() == InvalidPathL->getAccessPath())
-          return true;
-        if (PlaceholderL && InvalidPlaceholderL &&
-            PlaceholderL->getParmVarDecl() ==
-                InvalidPlaceholderL->getParmVarDecl())
+        const Loan *InvalidL = FactMgr.getLoanMgr().getLoan(InvalidID);
+        if (InvalidL->getAccessPath().isStrictPrefixOf(L->getAccessPath()))
           return true;
       }
       return false;
@@ -237,12 +222,10 @@ public:
     for (const auto &[LID, Warning] : FinalWarningsMap) {
       const Loan *L = FactMgr.getLoanMgr().getLoan(LID);
 
-      const Expr *IssueExpr = nullptr;
-      if (const auto *BL = dyn_cast<PathLoan>(L))
-        IssueExpr = BL->getIssueExpr();
+      const Expr *IssueExpr = L->getIssueExpr();
       const ParmVarDecl *InvalidatedPVD = nullptr;
-      if (const auto *PL = dyn_cast<PlaceholderLoan>(L))
-        InvalidatedPVD = PL->getParmVarDecl();
+      if (const PlaceholderBase *PB = L->getAccessPath().getAsPlaceholderBase())
+        InvalidatedPVD = PB->getParmVarDecl();
       llvm::PointerUnion<const UseFact *, const OriginEscapesFact *>
           CausingFact = Warning.CausingFact;
       Confidence Confidence = Warning.ConfidenceLevel;
