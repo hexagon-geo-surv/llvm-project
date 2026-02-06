@@ -73,11 +73,7 @@ def DenseElementTypeInterface : TypeInterface<"DenseElementType"> {
       }],
       /*retTy=*/"size_t",
       /*methodName=*/"getDenseElementBitSize",
-      /*args=*/(ins),
-      /*methodBody=*/"",
-      /*defaultImplementation=*/[{
-        return ::mlir::detail::getDefaultDenseElementBitSize($_type);
-      }]
+      /*args=*/(ins)
     >,
     InterfaceMethod<
       /*desc=*/[{
@@ -87,11 +83,7 @@ def DenseElementTypeInterface : TypeInterface<"DenseElementType"> {
       }],
       /*retTy=*/"::mlir::Attribute",
       /*methodName=*/"convertToAttribute",
-      /*args=*/(ins "::llvm::ArrayRef<char>":$rawData),
-      /*methodBody=*/"",
-      /*defaultImplementation=*/[{
-        return ::mlir::detail::defaultConvertToAttribute($_type, rawData);
-      }]
+      /*args=*/(ins "::llvm::ArrayRef<char>":$rawData)
     >,
     InterfaceMethod<
       /*desc=*/[{
@@ -103,11 +95,7 @@ def DenseElementTypeInterface : TypeInterface<"DenseElementType"> {
       /*retTy=*/"::llvm::LogicalResult",
       /*methodName=*/"convertFromAttribute",
       /*args=*/(ins "::mlir::Attribute":$attr,
-                    "::llvm::SmallVectorImpl<char>&":$result),
-      /*methodBody=*/"",
-      /*defaultImplementation=*/[{
-        return ::mlir::detail::defaultConvertFromAttribute($_type, attr, result);
-      }]
+                    "::llvm::SmallVectorImpl<char>&":$result)
     >,
   ];
 }
@@ -153,6 +141,21 @@ def FloatTypeInterface : TypeInterface<"FloatType",
     /// Return the width of the mantissa of this type.
     /// The width includes the integer bit.
     unsigned getFPMantissaWidth();
+  }];
+
+  let extraTraitClassDeclaration = [{
+    /// DenseElementTypeInterface implementations for float types.
+    size_t getDenseElementBitSize() const {
+      return ::mlir::detail::getFloatTypeDenseElementBitSize($_type);
+    }
+    ::mlir::Attribute convertToAttribute(::llvm::ArrayRef<char> rawData) const {
+      return ::mlir::detail::convertFloatTypeToAttribute($_type, rawData);
+    }
+    ::llvm::LogicalResult
+    convertFromAttribute(::mlir::Attribute attr,
+                         ::llvm::SmallVectorImpl<char> &result) const {
+      return ::mlir::detail::convertFloatTypeFromAttribute($_type, attr, result);
+    }
   }];
 }
 

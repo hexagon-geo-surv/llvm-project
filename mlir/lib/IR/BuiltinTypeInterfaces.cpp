@@ -23,41 +23,25 @@ using namespace mlir::detail;
 #include "mlir/IR/BuiltinTypeInterfaces.cpp.inc"
 
 //===----------------------------------------------------------------------===//
-// DenseElementTypeInterface default implementations
+// DenseElementTypeInterface implementations for float types
 //===----------------------------------------------------------------------===//
 
-size_t mlir::detail::getDefaultDenseElementBitSize(Type type) {
-  // TODO: This implementation should be defined on FloatType. However, due to
-  // TableGen limitations, a type interface cannot provide an implementation for
-  // an interface method from a base type interface.
-  auto floatType = dyn_cast<FloatType>(type);
-  if (!floatType)
-    llvm_unreachable("getDenseElementBitSize not implemented");
-  return floatType.getWidth();
+size_t mlir::detail::getFloatTypeDenseElementBitSize(Type type) {
+  return cast<FloatType>(type).getWidth();
 }
 
-Attribute mlir::detail::defaultConvertToAttribute(Type type,
-                                                  ArrayRef<char> rawData) {
-  // TODO: This implementation should be defined on FloatType. However, due to
-  // TableGen limitations, a type interface cannot provide an implementation for
-  // an interface method from a base type interface.
-  auto floatType = dyn_cast<FloatType>(type);
-  if (!floatType)
-    llvm_unreachable("convertToAttribute not implemented");
+Attribute mlir::detail::convertFloatTypeToAttribute(Type type,
+                                                    ArrayRef<char> rawData) {
+  auto floatType = cast<FloatType>(type);
   APInt intVal = readBits(rawData.data(), /*bitPos=*/0, floatType.getWidth());
   APFloat floatVal(floatType.getFloatSemantics(), intVal);
   return FloatAttr::get(type, floatVal);
 }
 
 LogicalResult
-mlir::detail::defaultConvertFromAttribute(Type type, Attribute attr,
-                                          SmallVectorImpl<char> &result) {
-  // TODO: This implementation should be defined on FloatType. However, due to
-  // TableGen limitations, a type interface cannot provide an implementation for
-  // an interface method from a base type interface.
-  auto floatType = dyn_cast<FloatType>(type);
-  if (!floatType)
-    llvm_unreachable("convertFromAttribute not implemented");
+mlir::detail::convertFloatTypeFromAttribute(Type type, Attribute attr,
+                                            SmallVectorImpl<char> &result) {
+  auto floatType = cast<FloatType>(type);
   auto floatAttr = dyn_cast<FloatAttr>(attr);
   if (!floatAttr || floatAttr.getType() != type)
     return failure();

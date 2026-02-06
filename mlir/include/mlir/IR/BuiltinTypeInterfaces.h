@@ -21,15 +21,18 @@ class FloatType;
 class MLIRContext;
 
 namespace detail {
-/// Default implementation of DenseElementTypeInterface::getDenseElementBitSize.
-size_t getDefaultDenseElementBitSize(Type type);
+/// Float type implementation of
+/// DenseElementTypeInterface::getDenseElementBitSize.
+size_t getFloatTypeDenseElementBitSize(Type type);
 
-/// Default implementation of DenseElementTypeInterface::convertToAttribute.
-Attribute defaultConvertToAttribute(Type type, llvm::ArrayRef<char> rawData);
+/// Float type implementation of DenseElementTypeInterface::convertToAttribute.
+Attribute convertFloatTypeToAttribute(Type type, llvm::ArrayRef<char> rawData);
 
-/// Default implementation of DenseElementTypeInterface::convertFromAttribute.
-LogicalResult defaultConvertFromAttribute(Type type, Attribute attr,
-                                          llvm::SmallVectorImpl<char> &result);
+/// Float type implementation of
+/// DenseElementTypeInterface::convertFromAttribute.
+LogicalResult
+convertFloatTypeFromAttribute(Type type, Attribute attr,
+                              llvm::SmallVectorImpl<char> &result);
 
 /// Read `bitWidth` bits from byte-aligned position in `rawData` and return as
 /// an APInt. Handles endianness correctly.
