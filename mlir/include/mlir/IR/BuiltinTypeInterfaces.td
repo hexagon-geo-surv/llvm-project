@@ -51,8 +51,7 @@ def DenseElementTypeInterface : TypeInterface<"DenseElementType"> {
     This interface allows custom types to be used as element types in
     DenseElementsAttr. Types implementing this interface define:
 
-    1. The bit size for element storage. Only full byte sizes are supported
-       at the moment.
+    1. The bit size for element storage.
     2. Helper methods for converting from/to Attribute. This assumes that there
        is a corresponding attribute for each type that implements this
        interface.

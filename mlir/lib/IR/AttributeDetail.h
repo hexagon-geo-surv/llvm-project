@@ -39,7 +39,7 @@ inline size_t getDenseElementBitWidth(Type eltType) {
   // Check for DenseElementTypeInterface.
   if (auto denseEltType = llvm::dyn_cast<DenseElementType>(eltType))
     return denseEltType.getDenseElementBitSize();
-  return eltType.getIntOrFloatBitWidth();
+  llvm_unreachable("unsupported element type");
 }
 
 /// An attribute representing a reference to a dense vector or tensor object.
