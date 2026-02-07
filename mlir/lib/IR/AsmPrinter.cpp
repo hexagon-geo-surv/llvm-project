@@ -2731,7 +2731,7 @@ void AsmPrinter::Impl::printTypeFirstDenseElementsAttr(
   ArrayRef<char> rawData = attr.getRawData();
   // Storage is byte-aligned: align bit size up to next byte boundary.
   size_t bitSize = denseEltType.getDenseElementBitSize();
-  size_t byteSize = llvm::divideCeil(bitSize, (size_t)CHAR_BIT);
+  size_t byteSize = llvm::divideCeil(bitSize, static_cast<size_t>(CHAR_BIT));
 
   // Print elements: convert raw bytes to attribute, then print attribute.
   printDenseElementsAttrImpl(

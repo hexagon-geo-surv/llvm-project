@@ -964,57 +964,45 @@ Attribute Parser::parseDenseArrayAttr(Type attrType) {
 ///   - "failure" in case of a parse error.
 ///   - A valid Attribute otherwise.
 static FailureOr<Attribute> parseDenseElementsAttrTyped(Parser &p, SMLoc loc) {
-  // Try to parse an optional type. Skip l_paren because parseOptionalType
-  // would try to parse it as a tuple/function type, but '(' starts a complex
-  // literal like (0, 1) in dense syntax.
+  // Skip l_paren because "parseType" would try to parse it as a tuple/function
+  // type, but '(' starts a complex literal like in the literal-first syntax.
+  if (p.getToken().is(Token::l_paren))
+    return Attribute();
+
+  // Parse type and valdiate that it's a shaped type.
+  auto typeLoc = p.getToken().getLoc();
   Type type;
-  OptionalParseResult typeResult = p.getToken().is(Token::l_paren)
-                                       ? OptionalParseResult(std::nullopt)
-                                       : p.parseOptionalType(type);
+  OptionalParseResult typeResult = p.parseOptionalType(type);
   if (!typeResult.has_value())
     return Attribute(); // Not type-first syntax.
-
   if (failed(*typeResult))
     return failure(); // Type parse error.
 
-  // We parsed a type. Check for ':' to confirm type-first syntax.
-  if (!p.getToken().is(Token::colon)) {
-    p.emitError(loc, "expected ':' after type in dense attribute");
-    return failure();
-  }
-
-  // Validate the type.
   auto shapedType = dyn_cast<ShapedType>(type);
   if (!shapedType) {
-    p.emitError(loc, "expected a shaped type for dense elements");
+    p.emitError(typeLoc, "expected a shaped type for dense elements");
     return failure();
   }
-
   if (!shapedType.hasStaticShape()) {
-    p.emitError(loc, "dense elements type must have static shape");
+    p.emitError(typeLoc, "dense elements type must have static shape");
     return failure();
   }
 
   // Check that the element type implements DenseElementTypeInterface.
   auto denseEltType = dyn_cast<DenseElementType>(shapedType.getElementType());
   if (!denseEltType) {
-    p.emitError(loc, "element type must implement DenseElementTypeInterface "
-                     "for type-first dense syntax");
+    p.emitError(typeLoc,
+                "element type must implement DenseElementTypeInterface "
+                "for type-first dense syntax");
     return failure();
   }
 
-  // Consume the ':' that separates the type from the element list.
-  p.consumeToken(Token::colon);
-
-  ArrayRef<int64_t> shape = shapedType.getShape();
+  // Parse colon.
+  if (p.parseToken(Token::colon, "expected ':' after type in dense attribute"))
+    return failure();
 
   // Parse the element attributes and convert to raw bytes.
   SmallVector<char> rawData;
-  // Storage is byte-aligned: align bit size up to next byte boundary. This
-  // limitation could be lifted in the future to support dense packing of
-  // non-byte-sized elements.
-  size_t bitSize = denseEltType.getDenseElementBitSize();
-  size_t byteSize = llvm::divideCeil(bitSize, static_cast<size_t>(CHAR_BIT));
 
   // Helper to parse a single element.
   auto parseSingleElement = [&]() -> ParseResult {
@@ -1065,22 +1053,25 @@ static FailureOr<Attribute> parseDenseElementsAttrTyped(Parser &p, SMLoc loc) {
     if (parseSingleElement())
       return failure();
     isSplat = shapedType.getNumElements() != 1;
-  } else if (shape.empty()) {
+  } else if (shapedType.getShape().empty()) {
     // Scalar type shouldn't have a list.
     p.emitError(loc, "expected single element for scalar type, got list");
     return failure();
   } else {
     // Parse structured literal matching the shape.
-    if (parseElements(shape))
+    if (parseElements(shapedType.getShape()))
       return failure();
   }
 
-  // Verify element count (should match unless it's a splat).
-  int64_t numElements = shapedType.getNumElements();
-  if (!isSplat && rawData.size() != byteSize * numElements) {
-    p.emitError(loc) << "parsed " << (rawData.size() / byteSize)
-                     << " elements, but type expects " << numElements;
-    return failure();
+  if (!isSplat) {
+    // Safety check to protect against incorrect interface implementations.
+    // Storage is byte-aligned: each element starts at the beginning of a byte.
+    // (This limitation could be lifted in the future to support dense packing
+    // of non-byte-sized elements.)
+    size_t bitSize = denseEltType.getDenseElementBitSize();
+    size_t byteSize = llvm::divideCeil(bitSize, static_cast<size_t>(CHAR_BIT));
+    assert(rawData.size() == byteSize * shapedType.getNumElements() &&
+           "incorrect number of bytes in result buffer");
   }
 
   if (p.parseToken(Token::greater, "expected '>' to close dense attribute"))
