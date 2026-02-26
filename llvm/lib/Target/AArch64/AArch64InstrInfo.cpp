@@ -236,6 +236,7 @@ unsigned AArch64InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case AArch64::SPACE:
     NumBytes = MI.getOperand(1).getImm();
     break;
+
   case TargetOpcode::BUNDLE:
     NumBytes = getInstBundleSize(MI);
     break;
