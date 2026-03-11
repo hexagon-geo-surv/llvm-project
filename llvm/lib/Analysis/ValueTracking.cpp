@@ -10451,9 +10451,33 @@ ConstantRange llvm::computeConstantRange(const Value *V, bool ForSigned,
     if (auto *Range = IIQ.getMetadata(I, LLVMContext::MD_range))
       CR = CR.intersectWith(getConstantRangeFromMetadata(*Range));
 
-    if (const auto *CB = dyn_cast<CallBase>(V))
+    Value *FrexpSrc;
+    if (const auto *CB = dyn_cast<CallBase>(V)) {
       if (std::optional<ConstantRange> Range = CB->getRange())
         CR = CR.intersectWith(*Range);
+    } else if (match(I, m_ExtractValue<1>(m_Intrinsic<Intrinsic::frexp>(
+                            m_Value(FrexpSrc))))) {
+      const fltSemantics &FltSem =
+          FrexpSrc->getType()->getScalarType()->getFltSemantics();
+      // It should be possible to implement this for any type, but this logic
+      // only computes the range assuming standard subnormal handling.
+      if (APFloat::isIEEELikeFP(FltSem)) {
+        const DataLayout &DL = I->getFunction()->getDataLayout();
+        SimplifyQuery SQ(DL, nullptr, DT, AC, CtxI, UseInstrInfo);
+
+        KnownFPClass KnownSrc =
+            computeKnownFPClass(FrexpSrc, fcSubnormal, SQ, Depth + 1);
+
+        int MinExp = APFloat::semanticsMinExponent(FltSem) + 1;
+        if (!KnownSrc.isKnownNeverSubnormal())
+          MinExp -= (APFloat::semanticsPrecision(FltSem) - 1);
+
+        int MaxExp = APFloat::semanticsMaxExponent(FltSem) + 1;
+        CR = ConstantRange::getNonEmpty(
+            APInt(BitWidth, MinExp, /*isSigned=*/true),
+            APInt(BitWidth, MaxExp + 1, /*isSigned=*/true));
+      }
+    }
   }
 
   if (CtxI && AC) {
