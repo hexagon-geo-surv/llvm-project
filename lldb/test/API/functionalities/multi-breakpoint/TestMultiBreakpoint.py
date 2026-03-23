@@ -12,7 +12,6 @@ from lldbsuite.test import lldbutil
 from lldbsuite.test.gdbclientutils import *
 
 
-@skipUnlessDarwin  # Remove once lldbsever support is implemented.
 @skipIfOutOfTreeDebugserver
 @skipIf(archs=no_match(["x86_64", "arm64", "aarch64"]))
 class TestMultiBreakpoint(TestBase):
