@@ -89,7 +89,7 @@ define void @weakcorssing_prod_ovfl(ptr %A) {
 ; CHECK-ALL-NEXT:  Src: store i8 0, ptr %idx.0, align 1 --> Dst: store i8 0, ptr %idx.0, align 1
 ; CHECK-ALL-NEXT:    da analyze - none!
 ; CHECK-ALL-NEXT:  Src: store i8 0, ptr %idx.0, align 1 --> Dst: store i8 1, ptr %idx.1, align 1
-; CHECK-ALL-NEXT:    da analyze - none!
+; CHECK-ALL-NEXT:    da analyze - output [*|<]!
 ; CHECK-ALL-NEXT:  Src: store i8 1, ptr %idx.1, align 1 --> Dst: store i8 1, ptr %idx.1, align 1
 ; CHECK-ALL-NEXT:    da analyze - none!
 ;
@@ -97,7 +97,7 @@ define void @weakcorssing_prod_ovfl(ptr %A) {
 ; CHECK-WEAK-CROSSING-SIV-NEXT:  Src: store i8 0, ptr %idx.0, align 1 --> Dst: store i8 0, ptr %idx.0, align 1
 ; CHECK-WEAK-CROSSING-SIV-NEXT:    da analyze - output [*]!
 ; CHECK-WEAK-CROSSING-SIV-NEXT:  Src: store i8 0, ptr %idx.0, align 1 --> Dst: store i8 1, ptr %idx.1, align 1
-; CHECK-WEAK-CROSSING-SIV-NEXT:    da analyze - none!
+; CHECK-WEAK-CROSSING-SIV-NEXT:    da analyze - output [*|<]!
 ; CHECK-WEAK-CROSSING-SIV-NEXT:  Src: store i8 1, ptr %idx.1, align 1 --> Dst: store i8 1, ptr %idx.1, align 1
 ; CHECK-WEAK-CROSSING-SIV-NEXT:    da analyze - output [*]!
 ;
