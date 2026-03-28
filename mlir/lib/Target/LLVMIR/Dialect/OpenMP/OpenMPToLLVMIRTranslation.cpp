@@ -2090,33 +2090,35 @@ convertOmpTeams(omp::TeamsOp op, llvm::IRBuilderBase &builder,
   return success();
 }
 
-static void
-buildDependData(std::optional<ArrayAttr> dependKinds, OperandRange dependVars,
-                LLVM::ModuleTranslation &moduleTranslation,
-                SmallVectorImpl<llvm::OpenMPIRBuilder::DependData> &dds) {
+static llvm::omp::RTLDependenceKindTy
+convertDependKind(mlir::omp::ClauseTaskDepend kind) {
+  switch (kind) {
+  case mlir::omp::ClauseTaskDepend::taskdependin:
+    return llvm::omp::RTLDependenceKindTy::DepIn;
+  // The OpenMP runtime requires that the codegen for 'depend' clause for
+  // 'out' dependency kind must be the same as codegen for 'depend' clause
+  // with 'inout' dependency.
+  case mlir::omp::ClauseTaskDepend::taskdependout:
+  case mlir::omp::ClauseTaskDepend::taskdependinout:
+    return llvm::omp::RTLDependenceKindTy::DepInOut;
+  case mlir::omp::ClauseTaskDepend::taskdependmutexinoutset:
+    return llvm::omp::RTLDependenceKindTy::DepMutexInOutSet;
+  case mlir::omp::ClauseTaskDepend::taskdependinoutset:
+    return llvm::omp::RTLDependenceKindTy::DepInOutSet;
+  }
+  llvm_unreachable("unhandled depend kind");
+}
+
+static void buildDependDataLocator(
+    std::optional<ArrayAttr> dependKinds, OperandRange dependVars,
+    LLVM::ModuleTranslation &moduleTranslation,
+    SmallVectorImpl<llvm::OpenMPIRBuilder::DependData> &dds) {
   if (dependVars.empty())
     return;
   for (auto dep : llvm::zip(dependVars, dependKinds->getValue())) {
-    llvm::omp::RTLDependenceKindTy type;
-    switch (
-        cast<mlir::omp::ClauseTaskDependAttr>(std::get<1>(dep)).getValue()) {
-    case mlir::omp::ClauseTaskDepend::taskdependin:
-      type = llvm::omp::RTLDependenceKindTy::DepIn;
-      break;
-    // The OpenMP runtime requires that the codegen for 'depend' clause for
-    // 'out' dependency kind must be the same as codegen for 'depend' clause
-    // with 'inout' dependency.
-    case mlir::omp::ClauseTaskDepend::taskdependout:
-    case mlir::omp::ClauseTaskDepend::taskdependinout:
-      type = llvm::omp::RTLDependenceKindTy::DepInOut;
-      break;
-    case mlir::omp::ClauseTaskDepend::taskdependmutexinoutset:
-      type = llvm::omp::RTLDependenceKindTy::DepMutexInOutSet;
-      break;
-    case mlir::omp::ClauseTaskDepend::taskdependinoutset:
-      type = llvm::omp::RTLDependenceKindTy::DepInOutSet;
-      break;
-    };
+    auto kind =
+        cast<mlir::omp::ClauseTaskDependAttr>(std::get<1>(dep)).getValue();
+    llvm::omp::RTLDependenceKindTy type = convertDependKind(kind);
     llvm::Value *depVal = moduleTranslation.lookupValue(std::get<0>(dep));
     llvm::OpenMPIRBuilder::DependData dd(type, depVal->getType(), depVal);
     dds.emplace_back(dd);
@@ -2442,11 +2444,18 @@ convertIteratorRegion(llvm::Value *linearIV, IteratorInfo &iterInfo,
   return mlir::success();
 }
 
+/// Run an iterator loop over \p itersOp, converting the iterator region body
+/// at each iteration, then calling \p storeBody with the linearized IV to let
+/// the caller extract yield results and store them. This is shared boilerplate
+/// for both affinity iterator loops and depend iterator loops.
+using IteratorStoreBodyTy =
+    llvm::function_ref<void(llvm::Value *linearIV, mlir::omp::YieldOp yield)>;
+
 static mlir::LogicalResult
-fillAffinityIteratorLoop(mlir::omp::IteratorOp itersOp,
-                         llvm::IRBuilderBase &builder,
-                         mlir::LLVM::ModuleTranslation &moduleTranslation,
-                         llvm::Value *affinityList, IteratorInfo &iterInfo) {
+buildIteratorLoop(mlir::omp::IteratorOp itersOp, llvm::IRBuilderBase &builder,
+                mlir::LLVM::ModuleTranslation &moduleTranslation,
+                IteratorInfo &iterInfo, llvm::StringRef loopName,
+                IteratorStoreBodyTy storeBody) {
   mlir::Region &itersRegion = itersOp.getRegion();
   mlir::Block &iteratorRegionBlock = itersRegion.front();
 
@@ -2468,14 +2477,8 @@ fillAffinityIteratorLoop(mlir::omp::IteratorOp itersOp,
         mlir::dyn_cast<mlir::omp::YieldOp>(iteratorRegionBlock.getTerminator());
     assert(yield && yield.getResults().size() == 1 &&
            "expect omp.yield in iterator region to have one result");
-    auto entryOp =
-        yield.getResults()[0].getDefiningOp<mlir::omp::AffinityEntryOp>();
-    assert(entryOp && "expect yield generate an affinity entry");
 
-    llvm::Value *addr = moduleTranslation.lookupValue(entryOp.getAddr());
-    llvm::Value *len = moduleTranslation.lookupValue(entryOp.getLen());
-    storeAffinityEntry(builder, *moduleTranslation.getOpenMPBuilder(),
-                       affinityList, linearIV, addr, len);
+    storeBody(linearIV, yield);
 
     // Iterator-region block/value mappings are temporary for this conversion,
     // clear them to avoid stale entries in ModuleTranslation.
@@ -2486,8 +2489,7 @@ fillAffinityIteratorLoop(mlir::omp::IteratorOp itersOp,
 
   llvm::OpenMPIRBuilder::InsertPointOrErrorTy afterIP =
       moduleTranslation.getOpenMPBuilder()->createIteratorLoop(
-          loc, iterInfo.getTotalTrips(), bodyGen,
-          /*Name=*/"iterator");
+          loc, iterInfo.getTotalTrips(), bodyGen, loopName);
   if (failed(handleError(afterIP, *itersOp)))
     return failure();
 
@@ -2544,8 +2546,20 @@ buildAffinityData(mlir::omp::TaskOp &taskOp, llvm::IRBuilderBase &builder,
       assert(itersOp && "iterated value must be defined by omp.iterator");
       IteratorInfo iterInfo(itersOp, moduleTranslation, builder);
       llvm::Value *affList = allocateAffinityList(iterInfo.getTotalTrips());
-      if (failed(fillAffinityIteratorLoop(itersOp, builder, moduleTranslation,
-                                          affList, iterInfo)))
+      if (failed(buildIteratorLoop(
+              itersOp, builder, moduleTranslation, iterInfo, "iterator",
+              [&](llvm::Value *linearIV, mlir::omp::YieldOp yield) {
+                auto entryOp = yield.getResults()[0]
+                                   .getDefiningOp<mlir::omp::AffinityEntryOp>();
+                assert(entryOp && "expect yield generate an affinity entry");
+                llvm::Value *addr =
+                    moduleTranslation.lookupValue(entryOp.getAddr());
+                llvm::Value *len =
+                    moduleTranslation.lookupValue(entryOp.getLen());
+                storeAffinityEntry(builder,
+                                   *moduleTranslation.getOpenMPBuilder(),
+                                   affList, linearIV, addr, len);
+              })))
         return llvm::failure();
       ads.emplace_back(createAffinity(iterInfo.getTotalTrips(), affList));
     }
@@ -2599,6 +2613,123 @@ buildAffinityData(mlir::omp::TaskOp &taskOp, llvm::IRBuilderBase &builder,
   ad.Count = totalAffinityCount;
   ad.Info = affinityInfo;
 
+  return mlir::success();
+}
+
+// Build dependency information for an OpenMP construct with a depend clause,
+// handling both locator and iterator-modified depend clauses.
+static mlir::LogicalResult
+buildDependData(OperandRange dependVars, std::optional<ArrayAttr> dependKinds,
+                OperandRange dependIterated,
+                std::optional<ArrayAttr> dependIteratedKinds,
+                llvm::IRBuilderBase &builder,
+                mlir::LLVM::ModuleTranslation &moduleTranslation,
+                llvm::OpenMPIRBuilder::DependenciesInfo &taskDeps) {
+  bool hasLocator = !dependVars.empty();
+  bool hasIterator = !dependIterated.empty();
+
+  if (!hasLocator && !hasIterator)
+    return mlir::success();
+
+  llvm::OpenMPIRBuilder &ompBuilder = *moduleTranslation.getOpenMPBuilder();
+
+  if (!hasIterator) {
+    SmallVector<llvm::OpenMPIRBuilder::DependData> dds;
+    buildDependDataLocator(dependKinds, dependVars, moduleTranslation, dds);
+    llvm::Type *depArrayTy =
+        llvm::ArrayType::get(ompBuilder.DependInfo, dds.size());
+    llvm::Value *depArray;
+    {
+      llvm::IRBuilderBase::InsertPointGuard guard(builder);
+      builder.restoreIP(findAllocaInsertPoint(builder, moduleTranslation));
+      depArray = builder.CreateAlloca(depArrayTy, nullptr, ".dep.arr.addr");
+    }
+    for (auto [i, dd] : llvm::enumerate(dds)) {
+      llvm::Value *entry = builder.CreateConstInBoundsGEP2_64(
+          depArrayTy, depArray, 0, i);
+      ompBuilder.emitTaskDependency(builder, entry, dd);
+    }
+    taskDeps.DepArray = depArray;
+    taskDeps.NumDeps = builder.getInt32(dds.size());
+    return mlir::success();
+  }
+
+  llvm::Type *dependInfoTy = ompBuilder.DependInfo;
+
+  unsigned numLocator = dependVars.size();
+
+  // Compute total count: locator deps + sum of iterator trip counts.
+  llvm::Value *totalCount =
+      llvm::ConstantInt::get(builder.getInt32Ty(), numLocator);
+
+  llvm::SmallVector<IteratorInfo, 16> iterInfos;
+
+  for (auto iter : dependIterated) {
+    auto itersOp = iter.getDefiningOp<mlir::omp::IteratorOp>();
+    assert(itersOp && "depend_iterated value must be defined by omp.iterator");
+    iterInfos.emplace_back(itersOp, moduleTranslation, builder);
+    llvm::Value *tripCount32 = builder.CreateIntCast(
+        iterInfos.back().getTotalTrips(), builder.getInt32Ty(),
+        /*isSigned=*/false);
+    totalCount = builder.CreateAdd(totalCount, tripCount32);
+  }
+
+  // Allocate the kmp_depend_info array.
+  llvm::Value *totalCount64 = builder.CreateIntCast(
+      totalCount, builder.getInt64Ty(), /*isSigned=*/false);
+  llvm::Value *depArray;
+  {
+    llvm::IRBuilderBase::InsertPointGuard guard(builder);
+    builder.restoreIP(findAllocaInsertPoint(builder, moduleTranslation));
+    depArray =
+        builder.CreateAlloca(dependInfoTy, totalCount64, ".dep.arr.addr");
+  }
+
+  // Fill non-iterated entries at indices [0, numLocator).
+  if (hasLocator) {
+    SmallVector<llvm::OpenMPIRBuilder::DependData> dds;
+    buildDependDataLocator(dependKinds, dependVars, moduleTranslation, dds);
+    for (auto [i, dd] : llvm::enumerate(dds)) {
+      llvm::Value *idx = llvm::ConstantInt::get(builder.getInt64Ty(), i);
+      llvm::Value *entry =
+          builder.CreateInBoundsGEP(ompBuilder.DependInfo, depArray, idx);
+      ompBuilder.emitTaskDependency(builder, entry, dd);
+    }
+  }
+
+  // Fill iterated entries starting at index numLocator.
+  llvm::Value *offset =
+      llvm::ConstantInt::get(builder.getInt64Ty(), numLocator);
+  for (auto [i, iterInfo] : llvm::enumerate(iterInfos)) {
+    auto kindAttr = cast<mlir::omp::ClauseTaskDependAttr>(
+        dependIteratedKinds->getValue()[i]);
+    llvm::omp::RTLDependenceKindTy rtlKind =
+        convertDependKind(kindAttr.getValue());
+
+    auto itersOp = dependIterated[i].getDefiningOp<mlir::omp::IteratorOp>();
+    if (failed(buildIteratorLoop(
+            itersOp, builder, moduleTranslation, iterInfo, "dep_iterator",
+            [&](llvm::Value *linearIV, mlir::omp::YieldOp yield) {
+              llvm::Value *addr =
+                  moduleTranslation.lookupValue(yield.getResults()[0]);
+              llvm::Value *idx = builder.CreateAdd(offset, linearIV);
+              llvm::Value *entry = builder.CreateInBoundsGEP(
+                  ompBuilder.DependInfo, depArray, idx);
+              ompBuilder.emitTaskDependency(
+                  builder, entry,
+                  llvm::OpenMPIRBuilder::DependData{rtlKind, addr->getType(),
+                                                    addr});
+            })))
+      return mlir::failure();
+
+    // Advance offset by the trip count of this iterator.
+    llvm::Value *tripCount64 = builder.CreateIntCast(
+        iterInfo.getTotalTrips(), builder.getInt64Ty(), /*isSigned=*/false);
+    offset = builder.CreateAdd(offset, tripCount64);
+  }
+
+  taskDeps.DepArray = depArray;
+  taskDeps.NumDeps = totalCount;
   return mlir::success();
 }
 
@@ -2814,16 +2945,19 @@ convertOmpTaskOp(omp::TaskOp taskOp, llvm::IRBuilderBase &builder,
   pushCancelFinalizationCB(cancelTerminators, builder, ompBuilder, taskOp,
                            llvm::omp::Directive::OMPD_taskgroup);
 
-  SmallVector<llvm::OpenMPIRBuilder::DependData> dds;
-  buildDependData(taskOp.getDependKinds(), taskOp.getDependVars(),
-                  moduleTranslation, dds);
+  llvm::OpenMPIRBuilder::DependenciesInfo dependencies = {nullptr, nullptr};
+  if (failed(buildDependData(taskOp.getDependVars(), taskOp.getDependKinds(),
+                             taskOp.getDependIterated(),
+                             taskOp.getDependIteratedKinds(), builder,
+                             moduleTranslation, dependencies)))
+    return failure();
 
   llvm::OpenMPIRBuilder::LocationDescription ompLoc(builder);
   llvm::OpenMPIRBuilder::InsertPointOrErrorTy afterIP =
       moduleTranslation.getOpenMPBuilder()->createTask(
           ompLoc, allocaIP, bodyCB, !taskOp.getUntied(),
           moduleTranslation.lookupValue(taskOp.getFinal()),
-          moduleTranslation.lookupValue(taskOp.getIfExpr()), dds, ad,
+          moduleTranslation.lookupValue(taskOp.getIfExpr()), dependencies, ad,
           taskOp.getMergeable(),
           moduleTranslation.lookupValue(taskOp.getEventHandle()),
           moduleTranslation.lookupValue(taskOp.getPriority()));
@@ -7091,12 +7225,16 @@ convertOmpTarget(Operation &opInst, llvm::IRBuilderBase &builder,
       kernelInput.push_back(mapData.OriginalValue[i]);
   }
 
-  SmallVector<llvm::OpenMPIRBuilder::DependData> dds;
-  buildDependData(targetOp.getDependKinds(), targetOp.getDependVars(),
-                  moduleTranslation, dds);
-
   llvm::OpenMPIRBuilder::InsertPointTy allocaIP =
       findAllocaInsertPoint(builder, moduleTranslation);
+
+  llvm::OpenMPIRBuilder::DependenciesInfo dds = {nullptr, nullptr};
+  if (failed(buildDependData(
+          targetOp.getDependVars(), targetOp.getDependKinds(),
+          targetOp.getDependIterated(), targetOp.getDependIteratedKinds(),
+          builder, moduleTranslation, dds)))
+    return failure();
+
   llvm::OpenMPIRBuilder::LocationDescription ompLoc(builder);
 
   llvm::OpenMPIRBuilder::TargetDataInfo info(

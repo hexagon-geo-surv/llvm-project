@@ -1961,14 +1961,35 @@ void OpenMPIRBuilder::createTaskyield(const LocationDescription &Loc) {
   emitTaskyieldImpl(Loc);
 }
 
+void OpenMPIRBuilder::emitTaskDependency(IRBuilderBase &Builder, Value *Entry,
+                                         const DependData &Dep) {
+  // Store the pointer to the variable
+  Value *Addr = Builder.CreateStructGEP(
+      DependInfo, Entry,
+      static_cast<unsigned int>(RTLDependInfoFields::BaseAddr));
+  Value *DepValPtr = Builder.CreatePtrToInt(Dep.DepVal, Builder.getInt64Ty());
+  Builder.CreateStore(DepValPtr, Addr);
+  // Store the size of the variable
+  Value *Size = Builder.CreateStructGEP(
+      DependInfo, Entry, static_cast<unsigned int>(RTLDependInfoFields::Len));
+  Builder.CreateStore(
+      Builder.getInt64(M.getDataLayout().getTypeStoreSize(Dep.DepValueType)),
+      Size);
+  // Store the dependency kind
+  Value *Flags = Builder.CreateStructGEP(
+      DependInfo, Entry, static_cast<unsigned int>(RTLDependInfoFields::Flags));
+  Builder.CreateStore(ConstantInt::get(Builder.getInt8Ty(),
+                                       static_cast<unsigned int>(Dep.DepKind)),
+                      Flags);
+}
+
 // Processes the dependencies in Dependencies and does the following
 // - Allocates space on the stack of an array of DependInfo objects
 // - Populates each DependInfo object with relevant information of
 //   the corresponding dependence.
 // - All code is inserted in the entry block of the current function.
-static Value *emitTaskDependencies(
-    OpenMPIRBuilder &OMPBuilder,
-    const SmallVectorImpl<OpenMPIRBuilder::DependData> &Dependencies) {
+Value *OpenMPIRBuilder::emitTaskDependencies(
+    const SmallVectorImpl<DependData> &Dependencies) {
   // Early return if we have no dependencies to process
   if (Dependencies.empty())
     return nullptr;
@@ -1989,12 +2010,8 @@ static Value *emitTaskDependencies(
   // DepArray[idx].base_addr = ...;
   // \endcode
 
-  IRBuilderBase &Builder = OMPBuilder.Builder;
-  Type *DependInfo = OMPBuilder.DependInfo;
-  Module &M = OMPBuilder.M;
-
   Value *DepArray = nullptr;
-  OpenMPIRBuilder::InsertPointTy OldIP = Builder.saveIP();
+  InsertPointTy OldIP = Builder.saveIP();
   Builder.SetInsertPoint(
       OldIP.getBlock()->getParent()->getEntryBlock().getTerminator());
 
@@ -2006,26 +2023,7 @@ static Value *emitTaskDependencies(
   for (const auto &[DepIdx, Dep] : enumerate(Dependencies)) {
     Value *Base =
         Builder.CreateConstInBoundsGEP2_64(DepArrayTy, DepArray, 0, DepIdx);
-    // Store the pointer to the variable
-    Value *Addr = Builder.CreateStructGEP(
-        DependInfo, Base,
-        static_cast<unsigned int>(RTLDependInfoFields::BaseAddr));
-    Value *DepValPtr = Builder.CreatePtrToInt(Dep.DepVal, Builder.getInt64Ty());
-    Builder.CreateStore(DepValPtr, Addr);
-    // Store the size of the variable
-    Value *Size = Builder.CreateStructGEP(
-        DependInfo, Base, static_cast<unsigned int>(RTLDependInfoFields::Len));
-    Builder.CreateStore(
-        Builder.getInt64(M.getDataLayout().getTypeStoreSize(Dep.DepValueType)),
-        Size);
-    // Store the dependency kind
-    Value *Flags = Builder.CreateStructGEP(
-        DependInfo, Base,
-        static_cast<unsigned int>(RTLDependInfoFields::Flags));
-    Builder.CreateStore(
-        ConstantInt::get(Builder.getInt8Ty(),
-                         static_cast<unsigned int>(Dep.DepKind)),
-        Flags);
+    emitTaskDependency(Builder, Base, Dep);
   }
   return DepArray;
 }
@@ -2439,8 +2437,8 @@ llvm::StructType *OpenMPIRBuilder::getKmpTaskAffinityInfoTy() {
 OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::createTask(
     const LocationDescription &Loc, InsertPointTy AllocaIP,
     BodyGenCallbackTy BodyGenCB, bool Tied, Value *Final, Value *IfCondition,
-    SmallVector<DependData> Dependencies, AffinityData Affinities,
-    bool Mergeable, Value *EventHandle, Value *Priority) {
+    DependenciesInfo Dependencies, AffinityData Affinities, bool Mergeable,
+    Value *EventHandle, Value *Priority) {
 
   if (!updateToLocation(Loc))
     return InsertPointTy();
@@ -2618,7 +2616,9 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::createTask(
       Builder.CreateStore(Priority, CmplrData);
     }
 
-    Value *DepArray = emitTaskDependencies(*this, Dependencies);
+    Value *DepArray = Dependencies.DepArray;
+    Value *NumDeps = Dependencies.NumDeps;
+    bool HasDeps = (DepArray != nullptr);
 
     // In the presence of the `if` clause, the following IR is generated:
     //    ...
@@ -2649,12 +2649,12 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::createTask(
                                     &ElseTI);
       Builder.SetInsertPoint(ElseTI);
 
-      if (Dependencies.size()) {
+      if (HasDeps) {
         Function *TaskWaitFn =
             getOrCreateRuntimeFunctionPtr(OMPRTL___kmpc_omp_wait_deps);
         createRuntimeFunctionCall(
             TaskWaitFn,
-            {Ident, ThreadID, Builder.getInt32(Dependencies.size()), DepArray,
+            {Ident, ThreadID, NumDeps, DepArray,
              ConstantInt::get(Builder.getInt32Ty(), 0),
              ConstantPointerNull::get(PointerType::getUnqual(M.getContext()))});
       }
@@ -2673,13 +2673,13 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::createTask(
       Builder.SetInsertPoint(ThenTI);
     }
 
-    if (Dependencies.size()) {
+    if (HasDeps) {
       Function *TaskFn =
           getOrCreateRuntimeFunctionPtr(OMPRTL___kmpc_omp_task_with_deps);
       createRuntimeFunctionCall(
           TaskFn,
-          {Ident, ThreadID, TaskData, Builder.getInt32(Dependencies.size()),
-           DepArray, ConstantInt::get(Builder.getInt32Ty(), 0),
+          {Ident, ThreadID, TaskData, NumDeps, DepArray,
+           ConstantInt::get(Builder.getInt32Ty(), 0),
            ConstantPointerNull::get(PointerType::getUnqual(M.getContext()))});
 
     } else {
@@ -8783,8 +8783,8 @@ static Error emitTargetOutlinedFunction(
 OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::emitTargetTask(
     TargetTaskBodyCallbackTy TaskBodyCB, Value *DeviceID, Value *RTLoc,
     OpenMPIRBuilder::InsertPointTy AllocaIP,
-    const SmallVector<llvm::OpenMPIRBuilder::DependData> &Dependencies,
-    const TargetDataRTArgs &RTArgs, bool HasNoWait) {
+    const DependenciesInfo &Dependencies, const TargetDataRTArgs &RTArgs,
+    bool HasNoWait) {
 
   // The following explains the code-gen scenario for the `target` directive. A
   // similar scneario is followed for other device-related directives (e.g.
@@ -9101,7 +9101,9 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::emitTargetTask(
       }
     }
 
-    Value *DepArray = emitTaskDependencies(*this, Dependencies);
+    Value *DepArray = Dependencies.DepArray;
+    Value *NumDeps = Dependencies.NumDeps;
+    bool HasDeps = (DepArray != nullptr);
 
     // ---------------------------------------------------------------
     // V5.2 13.8 target construct
@@ -9112,13 +9114,13 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::emitTargetTask(
     // The above means that the lack of a nowait on the target construct
     // translates to '#pragma omp task if(0)'
     if (!NeedsTargetTask) {
-      if (DepArray) {
+      if (HasDeps) {
         Function *TaskWaitFn =
             getOrCreateRuntimeFunctionPtr(OMPRTL___kmpc_omp_wait_deps);
         createRuntimeFunctionCall(
             TaskWaitFn,
             {/*loc_ref=*/Ident, /*gtid=*/ThreadID,
-             /*ndeps=*/Builder.getInt32(Dependencies.size()),
+             /*ndeps=*/NumDeps,
              /*dep_list=*/DepArray,
              /*ndeps_noalias=*/ConstantInt::get(Builder.getInt32Ty(), 0),
              /*noalias_dep_list=*/
@@ -9133,7 +9135,7 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::emitTargetTask(
       CallInst *CI = createRuntimeFunctionCall(ProxyFn, {ThreadID, TaskData});
       CI->setDebugLoc(StaleCI->getDebugLoc());
       createRuntimeFunctionCall(TaskCompleteFn, {Ident, ThreadID, TaskData});
-    } else if (DepArray) {
+    } else if (HasDeps) {
       // HasNoWait - meaning the task may be deferred. Call
       // __kmpc_omp_task_with_deps if there are dependencies,
       // else call __kmpc_omp_task
@@ -9141,8 +9143,8 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::emitTargetTask(
           getOrCreateRuntimeFunctionPtr(OMPRTL___kmpc_omp_task_with_deps);
       createRuntimeFunctionCall(
           TaskFn,
-          {Ident, ThreadID, TaskData, Builder.getInt32(Dependencies.size()),
-           DepArray, ConstantInt::get(Builder.getInt32Ty(), 0),
+          {Ident, ThreadID, TaskData, NumDeps, DepArray,
+           ConstantInt::get(Builder.getInt32Ty(), 0),
            ConstantPointerNull::get(PointerType::getUnqual(M.getContext()))});
     } else {
       // Emit the @__kmpc_omp_task runtime call to spawn the task
@@ -9177,19 +9179,19 @@ Error OpenMPIRBuilder::emitOffloadingArraysAndArgs(
   return Error::success();
 }
 
-static void emitTargetCall(
-    OpenMPIRBuilder &OMPBuilder, IRBuilderBase &Builder,
-    OpenMPIRBuilder::InsertPointTy AllocaIP,
-    OpenMPIRBuilder::TargetDataInfo &Info,
-    const OpenMPIRBuilder::TargetKernelDefaultAttrs &DefaultAttrs,
-    const OpenMPIRBuilder::TargetKernelRuntimeAttrs &RuntimeAttrs,
-    Value *IfCond, Function *OutlinedFn, Constant *OutlinedFnID,
-    SmallVectorImpl<Value *> &Args,
-    OpenMPIRBuilder::GenMapInfoCallbackTy GenMapInfoCB,
-    OpenMPIRBuilder::CustomMapperCallbackTy CustomMapperCB,
-    const SmallVector<llvm::OpenMPIRBuilder::DependData> &Dependencies,
-    bool HasNoWait, Value *DynCGroupMem,
-    OMPDynGroupprivateFallbackType DynCGroupMemFallback) {
+static void
+emitTargetCall(OpenMPIRBuilder &OMPBuilder, IRBuilderBase &Builder,
+               OpenMPIRBuilder::InsertPointTy AllocaIP,
+               OpenMPIRBuilder::TargetDataInfo &Info,
+               const OpenMPIRBuilder::TargetKernelDefaultAttrs &DefaultAttrs,
+               const OpenMPIRBuilder::TargetKernelRuntimeAttrs &RuntimeAttrs,
+               Value *IfCond, Function *OutlinedFn, Constant *OutlinedFnID,
+               SmallVectorImpl<Value *> &Args,
+               OpenMPIRBuilder::GenMapInfoCallbackTy GenMapInfoCB,
+               OpenMPIRBuilder::CustomMapperCallbackTy CustomMapperCB,
+               const OpenMPIRBuilder::DependenciesInfo &Dependencies,
+               bool HasNoWait, Value *DynCGroupMem,
+               OMPDynGroupprivateFallbackType DynCGroupMemFallback) {
   // Generate a function call to the host fallback implementation of the target
   // region. This is called by the host when no offload entry was generated for
   // the target region and when the offloading call fails at runtime.
@@ -9204,7 +9206,7 @@ static void emitTargetCall(
     return Builder.saveIP();
   };
 
-  bool HasDependencies = Dependencies.size() > 0;
+  bool HasDependencies = Dependencies.DepArray != nullptr;
   bool RequiresOuterTargetTask = HasNoWait || HasDependencies;
 
   OpenMPIRBuilder::TargetKernelArgs KArgs;
@@ -9382,9 +9384,9 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::createTarget(
     SmallVectorImpl<Value *> &Inputs, GenMapInfoCallbackTy GenMapInfoCB,
     OpenMPIRBuilder::TargetBodyGenCallbackTy CBFunc,
     OpenMPIRBuilder::TargetGenArgAccessorsCallbackTy ArgAccessorFuncCB,
-    CustomMapperCallbackTy CustomMapperCB,
-    const SmallVector<DependData> &Dependencies, bool HasNowait,
-    Value *DynCGroupMem, OMPDynGroupprivateFallbackType DynCGroupMemFallback) {
+    CustomMapperCallbackTy CustomMapperCB, DependenciesInfo Dependencies,
+    bool HasNowait, Value *DynCGroupMem,
+    OMPDynGroupprivateFallbackType DynCGroupMemFallback) {
 
   if (!updateToLocation(Loc))
     return InsertPointTy();
@@ -9404,11 +9406,12 @@ OpenMPIRBuilder::InsertPointOrErrorTy OpenMPIRBuilder::createTarget(
   // If we are not on the target device, then we need to generate code
   // to make a remote call (offload) to the previously outlined function
   // that represents the target region. Do that now.
-  if (!Config.isTargetDevice())
+  if (!Config.isTargetDevice()) {
     emitTargetCall(*this, Builder, AllocaIP, Info, DefaultAttrs, RuntimeAttrs,
                    IfCond, OutlinedFn, OutlinedFnID, Inputs, GenMapInfoCB,
                    CustomMapperCB, Dependencies, HasNowait, DynCGroupMem,
                    DynCGroupMemFallback);
+  }
   return Builder.saveIP();
 }
 

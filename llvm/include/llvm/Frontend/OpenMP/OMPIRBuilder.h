@@ -1511,6 +1511,32 @@ public:
         : DepKind(DepKind), DepValueType(DepValueType), DepVal(DepVal) {}
   };
 
+  /// Holds pre-built dependency array information for a task.
+  /// The caller is responsible for allocating and populating the
+  /// kmp_dep_info array before passing it here.
+  struct DependenciesInfo {
+    Value *DepArray; // kmp_dep_info array pointer
+    Value *NumDeps;  // number of entries (i32)
+  };
+
+  /// Store one kmp_dep_info entry at the given \p Entry pointer.
+  ///
+  /// Fills in base_addr (ptrtoint of DepVal), len (DataLayout type size
+  /// of DepValueType), and flags (DepKind).
+  /// \param Builder  The IRBuilder to use for IR emission.
+  /// \param Entry    Pointer to the kmp_dep_info entry to fill.
+  /// \param Dep      The dependency data (kind, type, value).
+  LLVM_ABI void emitTaskDependency(IRBuilderBase &Builder, Value *Entry,
+                                   const DependData &Dep);
+
+  /// Emit the full dependency array for a set of fixed-count dependencies.
+  ///
+  /// Allocates a stack array of kmp_dep_info and fills each entry
+  /// using emitTaskDependency.
+  /// \return The pointer to the allocated array, or nullptr if empty.
+  LLVM_ABI Value *
+  emitTaskDependencies(const SmallVectorImpl<DependData> &Dependencies);
+
   /// Return the LLVM struct type matching runtime `kmp_task_affinity_info_t`.
   /// `{ kmp_intptr_t base_addr; size_t len; flags (bitfield storage as i32) }`
   LLVM_ABI llvm::StructType *getKmpTaskAffinityInfoTy();
@@ -1591,7 +1617,7 @@ public:
   LLVM_ABI InsertPointOrErrorTy createTask(
       const LocationDescription &Loc, InsertPointTy AllocaIP,
       BodyGenCallbackTy BodyGenCB, bool Tied = true, Value *Final = nullptr,
-      Value *IfCondition = nullptr, SmallVector<DependData> Dependencies = {},
+      Value *IfCondition = nullptr, DependenciesInfo Dependencies = {nullptr, nullptr},
       AffinityData Affinities = {}, bool Mergeable = false,
       Value *EventHandle = nullptr, Value *Priority = nullptr);
 
@@ -2892,11 +2918,11 @@ public:
   ///        dependencies as specified by the 'depend' clause.
   /// \param HasNoWait True if the target construct had 'nowait' on it, false
   ///        otherwise
-  LLVM_ABI InsertPointOrErrorTy emitTargetTask(
-      TargetTaskBodyCallbackTy TaskBodyCB, Value *DeviceID, Value *RTLoc,
-      OpenMPIRBuilder::InsertPointTy AllocaIP,
-      const SmallVector<llvm::OpenMPIRBuilder::DependData> &Dependencies,
-      const TargetDataRTArgs &RTArgs, bool HasNoWait);
+  LLVM_ABI InsertPointOrErrorTy
+  emitTargetTask(TargetTaskBodyCallbackTy TaskBodyCB, Value *DeviceID,
+                 Value *RTLoc, OpenMPIRBuilder::InsertPointTy AllocaIP,
+                 const DependenciesInfo &Dependencies,
+                 const TargetDataRTArgs &RTArgs, bool HasNoWait);
 
   /// Emit the arguments to be passed to the runtime library based on the
   /// arrays of base pointers, pointers, sizes, map types, and mappers.  If
@@ -3536,9 +3562,8 @@ public:
       SmallVectorImpl<Value *> &Inputs, GenMapInfoCallbackTy GenMapInfoCB,
       TargetBodyGenCallbackTy BodyGenCB,
       TargetGenArgAccessorsCallbackTy ArgAccessorFuncCB,
-      CustomMapperCallbackTy CustomMapperCB,
-      const SmallVector<DependData> &Dependencies, bool HasNowait = false,
-      Value *DynCGroupMem = nullptr,
+      CustomMapperCallbackTy CustomMapperCB, DependenciesInfo Dependencies = {nullptr, nullptr},
+      bool HasNowait = false, Value *DynCGroupMem = nullptr,
       omp::OMPDynGroupprivateFallbackType DynCGroupMemFallback =
           omp::OMPDynGroupprivateFallbackType::Abort);
 

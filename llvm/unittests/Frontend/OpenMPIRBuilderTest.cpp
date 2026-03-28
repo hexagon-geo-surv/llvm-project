@@ -7345,12 +7345,25 @@ TEST_F(OpenMPIRBuilderTest, CreateTaskDepend) {
                                      Type::getInt32Ty(M->getContext()), InDep);
     DDS.push_back(DDIn);
   }
+  // Allocate and fill the dep array directly (matching how buildDependData
+  // in the MLIR translation layer now works).
+  Type *DepArrayTy = ArrayType::get(OMPBuilder.DependInfo, DDS.size());
+  AllocaInst *DepArrayAlloca =
+      Builder.CreateAlloca(DepArrayTy, nullptr, ".dep.arr.addr");
+  for (const auto &[DepIdx, Dep] : enumerate(DDS)) {
+    Value *Base =
+        Builder.CreateConstInBoundsGEP2_64(DepArrayTy, DepArrayAlloca, 0,
+                                           DepIdx);
+    OMPBuilder.emitTaskDependency(Builder, Base, Dep);
+  }
   ASSERT_EXPECTED_INIT(
       OpenMPIRBuilder::InsertPointTy, AfterIP,
       OMPBuilder.createTask(
           Loc, InsertPointTy(AllocaBB, AllocaBB->getFirstInsertionPt()),
           BodyGenCB,
-          /*Tied=*/false, /*Final*/ nullptr, /*IfCondition*/ nullptr, DDS));
+          /*Tied=*/false, /*Final*/ nullptr, /*IfCondition*/ nullptr,
+          OpenMPIRBuilder::DependenciesInfo{DepArrayAlloca,
+                                            Builder.getInt32(DDS.size())}));
   Builder.restoreIP(AfterIP);
   OMPBuilder.finalize();
   Builder.CreateRetVoid();
@@ -7578,7 +7591,7 @@ TEST_F(OpenMPIRBuilderTest, CreateTaskAffinity) {
           /*Tied=*/true,
           /*Final=*/nullptr,
           /*IfCondition=*/nullptr,
-          /*Dependencies=*/{},
+          /*TaskDeps=*/{},
           /*Affinity=*/Affinity,
           /*Mergeable=*/false,
           /*EventHandle=*/nullptr,

@@ -690,6 +690,14 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
   kmp_taskdata_t *new_taskdata = KMP_TASK_TO_TASKDATA(new_task);
   KA_TRACE(10, ("__kmpc_omp_task_with_deps(enter): T#%d loc=%p task=%p\n", gtid,
                 loc_ref, new_taskdata));
+
+  for (kmp_int32 i = 0; i < ndeps; ++i) {
+    KA_TRACE(30, ("__kmpc_omp_task_with_deps: T#%d dep[%d] "
+                  "base_addr=0x%llx len=%zu flag=0x%x\n",
+                  gtid, i, (unsigned long long)dep_list[i].base_addr,
+                  dep_list[i].len, (unsigned)dep_list[i].flag));
+  }
+
   __kmp_assert_valid_gtid(gtid);
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *current_task = thread->th.th_current_task;
