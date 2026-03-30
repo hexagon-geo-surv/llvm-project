@@ -5747,6 +5747,8 @@ getDPPOpcForWaveReduction(unsigned Opc, const GCNSubtarget &ST) {
   case AMDGPU::V_MIN_F64_e64:
   case AMDGPU::V_MAX_NUM_F64_e64:
   case AMDGPU::V_MAX_F64_e64:
+  case AMDGPU::V_ADD_F64_pseudo_e64:
+  case AMDGPU::V_ADD_F64_e64:
     DPPOpc = AMDGPU::V_MOV_B64_DPP_PSEUDO;
     break;
   default:
@@ -6589,17 +6591,17 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
         }
         FinalDPPResult = RowBcast31;
       }
-      if (Opc == AMDGPU::V_SUB_F32_e64) {
-        Register NegatedValVGPR =
-            MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
-        BuildMI(*CurrBB, MI, DL, TII->get(AMDGPU::V_SUB_F32_e64),
+      if (Opc == AMDGPU::V_SUB_F32_e64 ||
+          MI.getOpcode() == AMDGPU::WAVE_REDUCE_FSUB_PSEUDO_F64) {
+        Register NegatedValVGPR = MRI.createVirtualRegister(SrcRegClass);
+        BuildMI(*CurrBB, MI, DL, TII->get(Opc),
                 NegatedValVGPR)
-            .addImm(SISrcMods::NONE)                    // src0 mods
-            .addReg(IdentityVGPR)                       // src0
-            .addImm(SISrcMods::NONE)                    // src1 mods
-            .addReg(IsWave32 ? RowBcast15 : RowBcast31) // src1
-            .addImm(SISrcMods::NONE)                    // clamp
-            .addImm(SISrcMods::NONE);                   // omod
+            .addImm(SISrcMods::NONE)                               // src0 mods
+            .addReg(IdentityVGPR)                                  // src0
+            .addImm(is32BitOpc ? SISrcMods::NONE : SISrcMods::NEG) // src1 mods
+            .addReg(IsWave32 ? RowBcast15 : RowBcast31)            // src1
+            .addImm(SISrcMods::NONE)                               // clamp
+            .addImm(SISrcMods::NONE);                              // omod
         FinalDPPResult = NegatedValVGPR;
       }
       // The final reduced value is in the last lane.
