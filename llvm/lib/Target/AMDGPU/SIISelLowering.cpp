@@ -6356,10 +6356,10 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
             MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
         Register SrcWithIdentityhi =
             MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
-        auto [Reg0Sub0, Reg0Sub1] =
-            ExtractSubRegs(MI, IdentityCopyInstr->getOperand(0), SrcRegClass);
+        auto [Reg0Sub0, Reg0Sub1] = ExtractSubRegs(
+            MI, IdentityCopyInstr->getOperand(0), SrcRegClass, ST, MRI);
         auto [SrcReg0Sub0, SrcReg0Sub1] =
-            ExtractSubRegs(MI, MI.getOperand(1), SrcRegClass);
+            ExtractSubRegs(MI, MI.getOperand(1), SrcRegClass, ST, MRI);
         MachineInstr *SetInactiveLoInstr =
             BuildSetInactiveInstr(SrcWithIdentitylo, SrcReg0Sub0, Reg0Sub0);
         MachineInstr *SetInactiveHiInstr =
@@ -6419,7 +6419,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
           Register SwizzledValue64 = MRI.createVirtualRegister(SrcRegClass);
           MachineOperand DPPRowShr8Op =
               MachineOperand::CreateReg(DPPRowShr8, /*isDef=*/false);
-          auto [Op1L, Op1H] = ExtractSubRegs(MI, DPPRowShr8Op, SrcRegClass);
+          auto [Op1L, Op1H] =
+              ExtractSubRegs(MI, DPPRowShr8Op, SrcRegClass, ST, MRI);
           BuildMI(*CurrBB, MI, DL, TII->get(AMDGPU::DS_SWIZZLE_B32),
                   SwizzledValuelo)
               .addReg(Op1L)  // addr
@@ -6498,7 +6499,7 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
             MachineOperand RowBcast15Op =
                 MachineOperand::CreateReg(RowBcast15, /*isDef=*/false);
             auto [RowBcast15Lo, RowBcast15Hi] =
-                ExtractSubRegs(MI, RowBcast15Op, SrcRegClass);
+                ExtractSubRegs(MI, RowBcast15Op, SrcRegClass, ST, MRI);
             BuildMI(*CurrBB, MI, DL, TII->get(AMDGPU::DS_PERMUTE_B32),
                     PermutedValuelo)
                 .addReg(PermuteByteOffset) // addr
@@ -6546,7 +6547,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
         const TargetRegisterClass *SrcRC = MRI.getRegClass(SrcReg);
         MachineOperand FinalDPPResultOperand =
             MachineOperand::CreateReg(FinalDPPResult, /*isDef=*/false);
-        auto [Op1L, Op1H] = ExtractSubRegs(MI, FinalDPPResultOperand, SrcRC);
+        auto [Op1L, Op1H] =
+            ExtractSubRegs(MI, FinalDPPResultOperand, SrcRC, ST, MRI);
         // lane value input should be in an sgpr
         BuildMI(*CurrBB, MI, DL, TII->get(AMDGPU::V_READLANE_B32),
                 LaneValueLoReg)
