@@ -5747,6 +5747,21 @@ getDPPOpcForWaveReduction(unsigned Opc, const GCNSubtarget &ST) {
   return {DPPOpc, ClampOpc};
 }
 
+static std::pair<Register, Register>
+ExtractSubRegs(MachineInstr &MI, MachineOperand &Op,
+               const TargetRegisterClass *SrcRC, const GCNSubtarget &ST,
+               MachineRegisterInfo &MRI) {
+  const SIRegisterInfo *TRI = ST.getRegisterInfo();
+  const SIInstrInfo *TII = ST.getInstrInfo();
+  const TargetRegisterClass *SrcSubRC =
+      TRI->getSubRegisterClass(SrcRC, AMDGPU::sub0);
+  Register Op1L =
+      TII->buildExtractSubReg(MI, MRI, Op, SrcRC, AMDGPU::sub0, SrcSubRC);
+  Register Op1H =
+      TII->buildExtractSubReg(MI, MRI, Op, SrcRC, AMDGPU::sub1, SrcSubRC);
+  return {Op1L, Op1H};
+}
+
 static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
                                           MachineBasicBlock &BB,
                                           const GCNSubtarget &ST,
@@ -5763,17 +5778,6 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
   unsigned Stratergy = static_cast<unsigned>(MI.getOperand(2).getImm());
   enum WAVE_REDUCE_STRATEGY : unsigned { DEFAULT = 0, ITERATIVE = 1, DPP = 2 };
   MachineBasicBlock *RetBB = nullptr;
-  auto ExtractSubRegs =
-      [&](MachineInstr &MI, MachineOperand &Op,
-          const TargetRegisterClass *SrcRC) -> std::pair<Register, Register> {
-    const TargetRegisterClass *SrcSubRC =
-        TRI->getSubRegisterClass(SrcRC, AMDGPU::sub0);
-    Register Op1L =
-        TII->buildExtractSubReg(MI, MRI, Op, SrcRC, AMDGPU::sub0, SrcSubRC);
-    Register Op1H =
-        TII->buildExtractSubReg(MI, MRI, Op, SrcRC, AMDGPU::sub1, SrcSubRC);
-    return {Op1L, Op1H};
-  };
   auto BuildRegSequence = [&](MachineBasicBlock &BB,
                               MachineBasicBlock::iterator MI, Register Dst,
                               Register Src0, Register Src1) {
@@ -5866,8 +5870,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
               MRI.createVirtualRegister(&AMDGPU::SReg_32RegClass);
           Register DestSub1 =
               MRI.createVirtualRegister(&AMDGPU::SReg_32RegClass);
-          auto [Op1L, Op1H] =
-              ExtractSubRegs(MI, MI.getOperand(1), MRI.getRegClass(SrcReg));
+          auto [Op1L, Op1H] = ExtractSubRegs(MI, MI.getOperand(1),
+                                             MRI.getRegClass(SrcReg), ST, MRI);
           BuildMI(BB, MI, DL, TII->get(AMDGPU::S_MUL_I32), DestSub0)
               .addReg(Op1L)
               .addReg(ParityRegister);
@@ -5910,8 +5914,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
             MRI.createVirtualRegister(&AMDGPU::SReg_32RegClass);
         Register NegatedValHi =
             MRI.createVirtualRegister(&AMDGPU::SReg_32RegClass);
-        auto [Op1L, Op1H] =
-            ExtractSubRegs(MI, MI.getOperand(1), MRI.getRegClass(SrcReg));
+        auto [Op1L, Op1H] = ExtractSubRegs(MI, MI.getOperand(1),
+                                           MRI.getRegClass(SrcReg), ST, MRI);
         if (Opc == AMDGPU::S_SUB_U64_PSEUDO) {
           BuildMI(BB, MI, DL, TII->get(AMDGPU::S_SUB_I32), NegatedValLo)
               .addImm(0)
@@ -5997,7 +6001,7 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
           Register LaneValueHiReg =
               MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
           auto [Op1L, Op1H] =
-              ExtractSubRegs(MI, DestVregInst->getOperand(0), VregRC);
+              ExtractSubRegs(MI, DestVregInst->getOperand(0), VregRC, ST, MRI);
           // lane value input should be in an sgpr
           BuildMI(BB, MI, DL, TII->get(AMDGPU::V_READFIRSTLANE_B32),
                   LaneValueLoReg)
@@ -6118,8 +6122,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
             MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
         Register LaneValReg =
             MRI.createVirtualRegister(&AMDGPU::SReg_64RegClass);
-        auto [Op1L, Op1H] =
-            ExtractSubRegs(MI, MI.getOperand(1), MRI.getRegClass(SrcReg));
+        auto [Op1L, Op1H] = ExtractSubRegs(MI, MI.getOperand(1),
+                                           MRI.getRegClass(SrcReg), ST, MRI);
         // lane value input should be in an sgpr
         BuildMI(*ComputeLoop, I, DL, TII->get(AMDGPU::V_READLANE_B32),
                 LaneValueLoReg)
@@ -6153,8 +6157,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
           const TargetRegisterClass *VregClass =
               TRI->getAllocatableClass(TII->getRegClass(MI.getDesc(), SrcIdx));
           Register AccumulatorVReg = MRI.createVirtualRegister(VregClass);
-          auto [SrcReg0Sub0, SrcReg0Sub1] =
-              ExtractSubRegs(MI, Accumulator->getOperand(0), VregClass);
+          auto [SrcReg0Sub0, SrcReg0Sub1] = ExtractSubRegs(
+              MI, Accumulator->getOperand(0), VregClass, ST, MRI);
           BuildRegSequence(*ComputeLoop, I, AccumulatorVReg, SrcReg0Sub0,
                            SrcReg0Sub1);
           BuildMI(*ComputeLoop, I, DL, TII->get(Opc), LaneMaskReg)
@@ -6209,8 +6213,8 @@ static MachineBasicBlock *lowerWaveReduce(MachineInstr &MI,
               BuildMI(*ComputeLoop, I, DL,
                       TII->get(AMDGPU::V_READFIRSTLANE_B32), LaneValHi);
           MachineBasicBlock::iterator Iters = *ReadLaneLo;
-          auto [Op1L, Op1H] =
-              ExtractSubRegs(*Iters, DstVregInst->getOperand(0), VregRC);
+          auto [Op1L, Op1H] = ExtractSubRegs(*Iters, DstVregInst->getOperand(0),
+                                             VregRC, ST, MRI);
           ReadLaneLo.addReg(Op1L);
           ReadLaneHi.addReg(Op1H);
           NewAccumulator =
