@@ -784,15 +784,18 @@ void AMDGPUSwLowerLDS::lowerKernelLDSAccesses(Function *Func,
   auto *WIdBlock = BasicBlock::Create(Ctx, "WId", Func, MallocBlock);
 
   // Move constant-size allocas from the original entry block to the new entry
-  // block (WIdBlock) so they remain static allocas.
-  for (BasicBlock::iterator BI = PrevEntryBlock->begin(),
-                            BE = PrevEntryBlock->end();
-       BI != BE;) {
-    Instruction &I = *BI++;
+  // block (WIdBlock) so they remain static allocas. Splice the leading cluster
+  // in bulk, then move any stragglers that are interleaved with other
+  // instructions.
+  auto SplitIt = PrevEntryBlock->begin();
+  while (SplitIt != PrevEntryBlock->end() && isa<AllocaInst>(&*SplitIt))
+    ++SplitIt;
+  WIdBlock->splice(WIdBlock->end(), PrevEntryBlock, PrevEntryBlock->begin(),
+                   SplitIt);
+  for (Instruction &I : make_early_inc_range(*PrevEntryBlock))
     if (auto *AI = dyn_cast<AllocaInst>(&I))
       if (isa<ConstantInt>(AI->getArraySize()))
         AI->moveBefore(*WIdBlock, WIdBlock->end());
-  }
 
   IRB.SetInsertPoint(WIdBlock, WIdBlock->end());
   DebugLoc FirstDL =
