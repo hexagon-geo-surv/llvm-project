@@ -67,6 +67,7 @@ struct ReturnThisPointer {
 //--- test_source.cpp
 
 #include "test_header.h"
+#include "Inputs/lifetime-analysis.h"
 
 View definition_before_header(View a) {
   return a;                               // expected-note {{param returned here}}
@@ -456,3 +457,23 @@ S forward(const MyObj &obj) { // expected-warning {{parameter in intra-TU functi
 }
 
 } // namespace track_origins_for_lifetimebound_record_type
+
+namespace make_unique_suggestion {
+
+struct LifetimeBoundCtor {
+  LifetimeBoundCtor(const MyObj& obj [[clang::lifetimebound]]);
+};
+
+std::unique_ptr<LifetimeBoundCtor> create_target(const MyObj& obj) { // expected-warning {{parameter in intra-TU function should be marked [[clang::lifetimebound]]}}
+  return std::make_unique<LifetimeBoundCtor>(obj); // expected-note {{param returned here}}
+}
+
+void test_inference() {
+  std::unique_ptr<LifetimeBoundCtor> ptr;
+  {
+    MyObj obj;
+    ptr = create_target(obj); // expected-warning {{object whose reference is captured does not live long enough}}
+  } // expected-note {{destroyed here}}
+  (void)ptr; // expected-note {{later used here}}
+}
+} // namespace make_unique_suggestion
