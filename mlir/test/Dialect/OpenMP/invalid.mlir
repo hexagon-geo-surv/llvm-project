@@ -3488,7 +3488,7 @@ omp.private {type = private} @target.var1.privatizer : index init {
 
 func.func @target_private_type_mismatch(%arg0: index) {
   // expected-error @below {{type mismatch between a private variable and its privatizer op, var type: 'index' vs. privatizer op type: '!llvm.ptr'}}
-  omp.target private(@target.var1.privatizer %arg0 -> %arg1 : index) {
+  omp.target kernel_type(generic) private(@target.var1.privatizer %arg0 -> %arg1 : index) {
     omp.terminator
   }
 
@@ -3611,7 +3611,7 @@ omp.private {type = firstprivate} @target.firstprivate.type_mismatch.privatizer 
 
 func.func @target_firstprivate_type_mismatch(%arg0: index) {
   // expected-error @below {{type mismatch between a firstprivate variable and its privatizer op, var type: 'index' vs. privatizer op type: '!llvm.ptr'}}
-  omp.target private(@target.firstprivate.type_mismatch.privatizer %arg0 -> %arg1 : index) {
+  omp.target kernel_type(generic) private(@target.firstprivate.type_mismatch.privatizer %arg0 -> %arg1 : index) {
     omp.terminator
   }
 
@@ -3620,7 +3620,7 @@ func.func @target_firstprivate_type_mismatch(%arg0: index) {
 
 func.func @target_undefined_privatizer(%arg0: index) {
   // expected-error @below {{failed to lookup privatizer op with symbol: '@missing.target.privatizer'}}
-  omp.target private(@missing.target.privatizer %arg0 -> %arg1 : index) {
+  omp.target kernel_type(generic) private(@missing.target.privatizer %arg0 -> %arg1 : index) {
     omp.terminator
   }
 
@@ -3630,7 +3630,8 @@ func.func @target_undefined_privatizer(%arg0: index) {
 func.func @target_private_count_mismatch(%arg0: !llvm.ptr) {
   // expected-error @below {{inconsistent number of private variables and privatizer op symbols, private vars: 1 vs. privatizer op symbols: 2}}
   "omp.target"(%arg0) <{operandSegmentSizes = array<i32: 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0>,
-                         private_syms = [@x.privatizer, @y.privatizer]}> ({
+                         private_syms = [@x.privatizer, @y.privatizer],
+                         kernel_type = #omp<kernel_type(generic)>}> ({
   ^bb0(%arg1 : !llvm.ptr):
     omp.terminator
   }) : (!llvm.ptr) -> ()
