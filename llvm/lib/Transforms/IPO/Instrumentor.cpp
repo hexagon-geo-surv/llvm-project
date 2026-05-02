@@ -353,6 +353,7 @@ BaseConfigurationOption::createStringOption(InstrumentationConfig &IConf,
 void InstrumentationConfig::populate(InstrumentorIRBuilderTy &IIRB) {
   /// List of all instrumentation opportunities.
   FunctionIO::populate(*this, IIRB.Ctx);
+  UnreachableIO::populate(*this, IIRB.Ctx);
   AllocaIO::populate(*this, IIRB.Ctx);
   LoadIO::populate(*this, IIRB);
   StoreIO::populate(*this, IIRB);
@@ -745,6 +746,17 @@ Value *FunctionIO::isMainFunction(Value &V, Type &Ty,
   return getCI(&Ty, Fn.getName() == "main");
 }
 
+///}
+
+/// UnreachableIO
+///{
+void UnreachableIO::init(InstrumentationConfig &IConf, LLVMContext &Ctx,
+                         ConfigTy *UserConfig) {
+  if (UserConfig)
+    Config = *UserConfig;
+  addCommonArgs(IConf, Ctx, Config.has(PassId));
+  IConf.addChoice(*this, Ctx);
+}
 ///}
 
 /// AllocaIO
