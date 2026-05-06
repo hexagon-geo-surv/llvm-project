@@ -384,24 +384,23 @@ define amdgpu_kernel void @s_and_constant_i64(ptr addrspace(1) %out, i64 %a) {
 define amdgpu_kernel void @s_and_multi_use_constant_i64(ptr addrspace(1) %out, i64 %a, i64 %b) {
 ; EG-LABEL: s_and_multi_use_constant_i64:
 ; EG:       ; %bb.0:
-; EG-NEXT:    ALU 10, @6, KC0[CB0:0-32], KC1[]
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T5.X, T4.X, 0
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T3.X, T2.X, 0
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T1.X, T2.X, 0
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T0.X, T4.X, 1
+; EG-NEXT:    ALU 9, @6, KC0[CB0:0-32], KC1[]
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T5.X, T2.X, 0
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T4.X, T3.X, 0
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T1.X, T3.X, 0
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T0.X, T2.X, 1
 ; EG-NEXT:    CF_END
 ; EG-NEXT:    ALU clause starting at 6:
 ; EG-NEXT:     AND_INT T0.X, KC0[3].Y, literal.x,
 ; EG-NEXT:     AND_INT * T1.X, KC0[3].Z, literal.y,
 ; EG-NEXT:    524288(7.346840e-40), 128(1.793662e-43)
-; EG-NEXT:     ADD_INT * T0.W, KC0[2].Y, literal.x,
-; EG-NEXT:    4(5.605194e-45), 0(0.000000e+00)
-; EG-NEXT:     LSHR T2.X, PV.W, literal.x,
-; EG-NEXT:     AND_INT * T3.X, KC0[3].X, literal.y,
-; EG-NEXT:    2(2.802597e-45), 128(1.793662e-43)
-; EG-NEXT:     LSHR T4.X, KC0[2].Y, literal.x,
-; EG-NEXT:     AND_INT * T5.X, KC0[2].W, literal.y,
-; EG-NEXT:    2(2.802597e-45), 524288(7.346840e-40)
+; EG-NEXT:     LSHR * T2.X, KC0[2].Y, literal.x,
+; EG-NEXT:    2(2.802597e-45), 0(0.000000e+00)
+; EG-NEXT:     ADD_INT T3.X, PV.X, 1,
+; EG-NEXT:     AND_INT * T4.X, KC0[3].X, literal.x,
+; EG-NEXT:    128(1.793662e-43), 0(0.000000e+00)
+; EG-NEXT:     AND_INT * T5.X, KC0[2].W, literal.x,
+; EG-NEXT:    524288(7.346840e-40), 0(0.000000e+00)
   %and0 = and i64 %a, 549756338176
   %and1 = and i64 %b, 549756338176
   store volatile i64 %and0, ptr addrspace(1) %out
@@ -429,11 +428,11 @@ define amdgpu_kernel void @s_and_32_bit_constant_i64(ptr addrspace(1) %out, i32,
 define amdgpu_kernel void @s_and_multi_use_inline_imm_i64(ptr addrspace(1) %out, i32, i64 %a, i32, i64 %b, i32, i64 %c) {
 ; EG-LABEL: s_and_multi_use_inline_imm_i64:
 ; EG:       ; %bb.0:
-; EG-NEXT:    ALU 17, @6, KC0[CB0:0-32], KC1[]
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T4.X, T5.X, 0
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T2.X, T3.X, 0
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T1.X, T3.X, 0
-; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T0.X, T5.X, 1
+; EG-NEXT:    ALU 14, @6, KC0[CB0:0-32], KC1[]
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T5.X, T3.X, 0
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T2.X, T4.X, 0
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T1.X, T4.X, 0
+; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T0.X, T3.X, 1
 ; EG-NEXT:    CF_END
 ; EG-NEXT:    ALU clause starting at 6:
 ; EG-NEXT:     LSHL T0.W, KC0[3].W, 1,
@@ -447,13 +446,10 @@ define amdgpu_kernel void @s_and_multi_use_inline_imm_i64(ptr addrspace(1) %out,
 ; EG-NEXT:     ADD_INT T1.X, KC0[5].X, PS,
 ; EG-NEXT:     ADDC_UINT * T0.W, PV.W, KC0[4].W,
 ; EG-NEXT:     ADD_INT T2.X, KC0[5].X, PV.W,
-; EG-NEXT:     ADD_INT * T0.W, KC0[2].Y, literal.x,
-; EG-NEXT:    4(5.605194e-45), 0(0.000000e+00)
-; EG-NEXT:     LSHR T3.X, PV.W, literal.x,
-; EG-NEXT:     ADD_INT * T4.X, T1.W, KC0[4].W,
+; EG-NEXT:     LSHR * T3.X, KC0[2].Y, literal.x,
 ; EG-NEXT:    2(2.802597e-45), 0(0.000000e+00)
-; EG-NEXT:     LSHR * T5.X, KC0[2].Y, literal.x,
-; EG-NEXT:    2(2.802597e-45), 0(0.000000e+00)
+; EG-NEXT:     ADD_INT T4.X, PS, 1,
+; EG-NEXT:     ADD_INT * T5.X, T1.W, KC0[4].W,
   %shl.a = shl i64 %a, 1
   %shl.b = shl i64 %b, 1
   %and0 = and i64 %shl.a, 62
@@ -535,7 +531,7 @@ define amdgpu_kernel void @v_and_multi_use_constant_i64(ptr addrspace(1) %out, p
 ; EG-NEXT:    TEX 0 @14
 ; EG-NEXT:    ALU 0, @23, KC0[], KC1[]
 ; EG-NEXT:    TEX 1 @16
-; EG-NEXT:    ALU 10, @24, KC0[CB0:0-32], KC1[]
+; EG-NEXT:    ALU 8, @24, KC0[CB0:0-32], KC1[]
 ; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T1.X, T5.X, 0
 ; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T2.X, T4.X, 0
 ; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T3.X, T5.X, 0
@@ -560,13 +556,11 @@ define amdgpu_kernel void @v_and_multi_use_constant_i64(ptr addrspace(1) %out, p
 ; EG-NEXT:     AND_INT * T3.X, T3.X, literal.y,
 ; EG-NEXT:    -1424379385(-5.460358e-13), 286(4.007714e-43)
 ; EG-NEXT:     AND_INT T2.X, T2.X, literal.x,
-; EG-NEXT:     LSHR * T4.X, KC0[2].Y, literal.y,
-; EG-NEXT:    -1424379385(-5.460358e-13), 2(2.802597e-45)
-; EG-NEXT:     AND_INT T1.X, T1.X, literal.x,
-; EG-NEXT:     ADD_INT * T0.W, KC0[2].Y, literal.y,
-; EG-NEXT:    286(4.007714e-43), 4(5.605194e-45)
-; EG-NEXT:     LSHR * T5.X, PV.W, literal.x,
+; EG-NEXT:     AND_INT * T1.X, T1.X, literal.y,
+; EG-NEXT:    -1424379385(-5.460358e-13), 286(4.007714e-43)
+; EG-NEXT:     LSHR * T4.X, KC0[2].Y, literal.x,
 ; EG-NEXT:    2(2.802597e-45), 0(0.000000e+00)
+; EG-NEXT:     ADD_INT * T5.X, PV.X, 1,
   %a = load volatile i64, ptr addrspace(1) %aptr
   %b = load volatile i64, ptr addrspace(1) %aptr
   %and0 = and i64 %a, 1231231234567
@@ -585,7 +579,7 @@ define amdgpu_kernel void @v_and_multi_use_inline_imm_i64(ptr addrspace(1) %out,
 ; EG-NEXT:    TEX 0 @14
 ; EG-NEXT:    ALU 0, @23, KC0[], KC1[]
 ; EG-NEXT:    TEX 1 @16
-; EG-NEXT:    ALU 8, @24, KC0[CB0:0-32], KC1[]
+; EG-NEXT:    ALU 7, @24, KC0[CB0:0-32], KC1[]
 ; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T4.X, T3.X, 0
 ; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T1.X, T2.X, 0
 ; EG-NEXT:    MEM_RAT_CACHELESS STORE_RAW T4.X, T3.X, 0
@@ -609,12 +603,11 @@ define amdgpu_kernel void @v_and_multi_use_inline_imm_i64(ptr addrspace(1) %out,
 ; EG-NEXT:     AND_INT T0.X, T0.X, literal.x,
 ; EG-NEXT:     AND_INT * T1.X, T1.X, literal.x,
 ; EG-NEXT:    63(8.828180e-44), 0(0.000000e+00)
-; EG-NEXT:     LSHR T2.X, KC0[2].Y, literal.x,
-; EG-NEXT:     ADD_INT * T0.W, KC0[2].Y, literal.y,
-; EG-NEXT:    2(2.802597e-45), 4(5.605194e-45)
-; EG-NEXT:     LSHR T3.X, PV.W, literal.x,
-; EG-NEXT:     MOV * T4.X, literal.y,
+; EG-NEXT:     LSHR * T2.X, KC0[2].Y, literal.x,
 ; EG-NEXT:    2(2.802597e-45), 0(0.000000e+00)
+; EG-NEXT:     ADD_INT T3.X, PV.X, 1,
+; EG-NEXT:     MOV * T4.X, literal.x,
+; EG-NEXT:    0(0.000000e+00), 0(0.000000e+00)
   %a = load volatile i64, ptr addrspace(1) %aptr
   %b = load volatile i64, ptr addrspace(1) %aptr
   %and0 = and i64 %a, 63
