@@ -16,9 +16,11 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/StringSaver.h"
 
 #include <string>
@@ -217,6 +219,41 @@ bool readConfigFromJSON(InstrumentationConfig &IConf, StringRef InputFile,
     for (auto &It : IChoiceMap)
       if (!SeenIOs.count(It.second))
         It.second->Enabled = false;
+
+  return true;
+}
+
+bool readConfigPathsFile(StringRef InputFile, cl::list<std::string> &Configs,
+                         LLVMContext &Ctx) {
+  if (InputFile.empty())
+    return true;
+
+  std::error_code EC;
+  auto BufferOrErr = MemoryBuffer::getFileOrSTDIN(InputFile);
+  if (std::error_code EC = BufferOrErr.getError()) {
+    Ctx.diagnose(DiagnosticInfoInstrumentation(
+        Twine("failed to open instrumentor configuration file for reading: ") +
+            EC.message(),
+        DS_Warning));
+    return false;
+  }
+
+  StringRef InputFilePath(sys::path::parent_path(InputFile));
+
+  auto Buffer = std::move(BufferOrErr.get());
+  StringRef Content = Buffer->getBuffer();
+  StringRef EOL = Content.detectEOL();
+  do {
+    auto [LHS, RHS] = Content.split(EOL);
+    std::string ConfigPath = LHS.trim().str();
+    if (!sys::path::is_absolute(ConfigPath)) {
+      SmallString<128> InputFilePathStringVec(InputFilePath);
+      sys::path::append(InputFilePathStringVec, ConfigPath);
+      ConfigPath = InputFilePathStringVec.c_str();
+    }
+    Configs.push_back(ConfigPath);
+    Content = RHS.trim();
+  } while (!Content.empty());
 
   return true;
 }
