@@ -492,7 +492,7 @@ v_pk_add_u16 v5, exec_lo, lit(1.0)
 // GFX11: v_pk_add_u16 v5, exec_lo, lit(0x3f800000) ; encoding: [0x05,0x40,0x0a,0xcc,0x7e,0xfe,0x01,0x1a,0x00,0x00,0x80,0x3f]
 // GFX12XX: v_pk_add_u16 v5, exec_lo, lit(0x3f800000) ; encoding: [0x05,0x40,0x0a,0xcc,0x7e,0xfe,0x01,0x1a,0x00,0x00,0x80,0x3f]
 // NOCI: :[[@LINE-3]]:1: error: instruction not supported on this GPU (bonaire): v_pk_add_u16
-// NOGFX9: :[[@LINE-4]]:31: error: invalid operand (violates constant bus restrictions)
+// NOGFX9: :[[@LINE-4]]:31: error: literal operands are not supported
 // NOSI: :[[@LINE-5]]:1: error: instruction not supported on this GPU (tahiti): v_pk_add_u16
 // NOVI: :[[@LINE-6]]:1: error: instruction not supported on this GPU (tonga): v_pk_add_u16
 
@@ -978,7 +978,7 @@ v_pk_add_u16 v5, exec_lo, lit(1)
 // GFX11: v_pk_add_u16 v5, exec_lo, lit(0x1)      ; encoding: [0x05,0x40,0x0a,0xcc,0x7e,0xfe,0x01,0x1a,0x01,0x00,0x00,0x00]
 // GFX12XX: v_pk_add_u16 v5, exec_lo, lit(0x1)      ; encoding: [0x05,0x40,0x0a,0xcc,0x7e,0xfe,0x01,0x1a,0x01,0x00,0x00,0x00]
 // NOCI: :[[@LINE-3]]:1: error: instruction not supported on this GPU (bonaire): v_pk_add_u16
-// NOGFX9: :[[@LINE-4]]:31: error: invalid operand (violates constant bus restrictions)
+// NOGFX9: :[[@LINE-4]]:31: error: literal operands are not supported
 // NOSI: :[[@LINE-5]]:1: error: instruction not supported on this GPU (tahiti): v_pk_add_u16
 // NOVI: :[[@LINE-6]]:1: error: instruction not supported on this GPU (tonga): v_pk_add_u16
 
