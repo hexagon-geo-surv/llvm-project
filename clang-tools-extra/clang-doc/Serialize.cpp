@@ -509,20 +509,20 @@ template <typename ChildType>
 OwnedPtr<Info> Serializer::makeAndInsertIntoParent(ChildType &Child) {
   if (Child.Namespace.empty()) {
     // Insert into unnamed parent namespace.
-    auto ParentNS = allocatePtr<NamespaceInfo>();
+    auto *ParentNS = allocatePtr<NamespaceInfo>();
     InsertChild(ParentNS->Children, Child);
     return ParentNS;
   }
 
   switch (Child.Namespace[0].RefType) {
   case InfoType::IT_namespace: {
-    auto ParentNS = allocatePtr<NamespaceInfo>();
+    auto *ParentNS = allocatePtr<NamespaceInfo>();
     ParentNS->USR = Child.Namespace[0].USR;
     InsertChild(ParentNS->Children, Child);
     return ParentNS;
   }
   case InfoType::IT_record: {
-    auto ParentRec = allocatePtr<RecordInfo>();
+    auto *ParentRec = allocatePtr<RecordInfo>();
     ParentRec->USR = Child.Namespace[0].USR;
     InsertChild(ParentRec->Children, Child);
     return ParentRec;
@@ -1009,7 +1009,7 @@ void Serializer::parseBases(llvm::SmallVectorImpl<BaseRecordInfo> &Bases,
 std::pair<OwnedPtr<Info>, OwnedPtr<Info>>
 Serializer::emitInfo(const NamespaceDecl *D, const FullComment *FC,
                      Location Loc, bool PublicOnly) {
-  auto NSI = allocatePtr<NamespaceInfo>();
+  auto *NSI = allocatePtr<NamespaceInfo>();
   bool IsInAnonymousNamespace = false;
   populateInfo(*NSI, D, FC, IsInAnonymousNamespace);
   if (!shouldSerializeInfo(PublicOnly, IsInAnonymousNamespace, D))
@@ -1085,7 +1085,7 @@ std::pair<OwnedPtr<Info>, OwnedPtr<Info>>
 Serializer::emitInfo(const RecordDecl *D, const FullComment *FC, Location Loc,
                      bool PublicOnly) {
 
-  auto RI = allocatePtr<RecordInfo>();
+  auto *RI = allocatePtr<RecordInfo>();
   bool IsInAnonymousNamespace = false;
 
   populateSymbolInfo(*RI, D, FC, Loc, IsInAnonymousNamespace);
@@ -1161,7 +1161,7 @@ Serializer::emitInfo(const RecordDecl *D, const FullComment *FC, Location Loc,
 
   // Records are inserted into the parent by reference, so we need to return
   // both the parent and the record itself.
-  auto Parent = makeAndInsertIntoParent<const RecordInfo &>(*RI);
+  auto *Parent = makeAndInsertIntoParent<const RecordInfo &>(*RI);
   return {std::move(RI), std::move(Parent)};
 }
 
