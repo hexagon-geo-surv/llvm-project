@@ -2299,8 +2299,7 @@ void AArch64DAGToDAGISel::SelectMultiVectorLutiLaneTuple(SDNode *Node,
   SmallVector<SDValue, 4> Ops = {
       createZTuple({Node->getOperand(1), Node->getOperand(2)}),
       createZTuple(IndexRegs),
-      Node->getOperand(ImmOp),
-  };
+      Node->getOperand(ImmOp)};
   EmitMultiVectorLutiLane(Node, NumOutVecs, Opc, Ops);
 }
 
@@ -2313,7 +2312,7 @@ void AArch64DAGToDAGISel::SelectMultiVectorLuti(SDNode *Node,
     return;
 
   SmallVector<SDValue, 4> Regs(Node->ops().slice(3, NumInVecs));
-  SDValue ZTuple = NumInVecs == 2 ? createZMulTuple(Regs) : createZTuple(Regs);
+  SDValue ZTuple = NumInVecs == 3 ? createZTuple(Regs) : createZMulTuple(Regs);
   SDValue Ops[] = {ZtValue, ZTuple, Node->getOperand(0)};
 
   SDLoc DL(Node);
