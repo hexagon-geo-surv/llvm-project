@@ -18,6 +18,7 @@
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBundle.h"
 #include "llvm/CodeGen/MachineOperand.h"
 
 #define DEBUG_TYPE "si-fold-operands"
@@ -737,11 +738,25 @@ bool SIFoldOperandsImpl::updateOperand(FoldCandidate &Fold) const {
   // 16-bit SGPRs instead of 32-bit ones.
   if (Old.getSubReg() == AMDGPU::lo16 && TRI->isSGPRReg(*MRI, New->getReg()))
     Old.setSubReg(AMDGPU::NoSubRegister);
+  Register OldReg = Old.getReg();
   if (New->getReg().isPhysical()) {
     Old.substPhysReg(New->getReg(), *TRI);
   } else {
     Old.substVirtReg(New->getReg(), New->getSubReg(), *TRI);
     Old.setIsUndef(New->isUndef());
+  }
+
+  // If MI is inside a BUNDLE, point the header's matching implicit use at
+  // NewReg too, so LiveVariables sees the fold.
+  if (MI->isBundledWithPred()) {
+    MachineInstr &Header = *getBundleStart(MI->getIterator());
+    for (MachineOperand &MO : Header.operands()) {
+      if (MO.isReg() && MO.isImplicit() && !MO.isDef() &&
+          MO.getReg() == OldReg) {
+        MO.setReg(New->getReg());
+        MO.setSubReg(New->getSubReg());
+      }
+    }
   }
   return true;
 }
