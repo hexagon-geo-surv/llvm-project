@@ -1010,7 +1010,6 @@ static bool checkReductionKind(Loop *L, PHINode *PHI,
     case RecurKind::SMax:
     case RecurKind::UMin:
     case RecurKind::UMax:
-    case RecurKind::AnyOf:
       return true;
 
     // Changing the order of floating-point operations may alter the results. If
