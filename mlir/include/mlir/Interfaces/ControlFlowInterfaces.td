@@ -118,15 +118,23 @@ def BranchOpInterface : OpInterface<"BranchOpInterface"> {
 def RegionBranchOpInterface : OpInterface<"RegionBranchOpInterface"> {
   let description = [{
     This interface provides information for region-holding operations that
-    exhibit branching behavior between held regions. I.e., this interface allows
-    for expressing control flow information for region holding operations.
+    exhibit branching behavior between held regions. It models the control flow
+    edges between regions (and between the op and its regions), as well as the
+    data flow (value propagation) that occurs along those control flow edges.
 
     This interface is meant to model well-defined cases of control-flow and
     value propagation, where what occurs along control-flow edges is assumed to
     be side-effect free.
 
-    A "region branch point" indicates a point from which a branch originates. It
-    can indicate:
+    Completeness is a core contract of this interface: the implementation must
+    model all possible control flow edges, so that callers can rely on the
+    returned information as a complete picture. Failing to report a possible
+    edge is an incorrect implementation and may cause analyses/transformations
+    to produce incorrect results. (It is acceptable to over-approximate by
+    reporting edges that turn out to be infeasible at runtime.)
+
+    A "region branch point" indicates the point from which a branch (edge)
+    originates. It can indicate:
     1. A `RegionBranchTerminatorOpInterface` terminator in any of the
        immediately nested regions of this op.
     2. `RegionBranchPoint::parent()`: the branch originates from outside of the
