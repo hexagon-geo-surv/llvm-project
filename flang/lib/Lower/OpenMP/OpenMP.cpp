@@ -74,12 +74,12 @@ static void genOMPDispatch(lower::AbstractConverter &converter,
 /// Return the directive that is immediately nested inside of the given
 /// \c parent evaluation, if it is its only non-end-statement nested evaluation
 /// and it represents an OpenMP construct.
-lower::pft::Evaluation *
+static lower::pft::Evaluation *
 extractOnlyOmpNestedEval(lower::pft::Evaluation &parent) {
   if (!parent.hasNestedEvaluations())
     return nullptr;
 
-  auto &nested{parent.getFirstNestedEvaluation()};
+  auto &nested = parent.getFirstNestedEvaluation();
   if (!nested.isA<parser::OpenMPConstruct>())
     return nullptr;
 
@@ -4395,9 +4395,10 @@ static void genOMPDispatch(lower::AbstractConverter &converter,
   if (loopLeaf)
     symTable.popScope();
 
-  // Add the omp.combined attribute to eligible ops. In this case, all
-  // composable ops that are not loop-associated, except for the ones that can
-  // only appear as the innermost leaf construct.
+  // Add the omp.combined attribute to eligible ops, including non-innermost
+  // leafs of a combined construct and immediately nested block-associated
+  // combinable constructs. SECTIONS, WORKSHARE and WORKDISTRIBUTE are skipped
+  // due to only being able to appear as an innermost combined construct.
   if (!loopLeaf &&
       llvm::isa_and_present<mlir::omp::ComposableOpInterface>(newOp) &&
       !llvm::isa<mlir::omp::SectionsOp, mlir::omp::WorkshareOp,
@@ -4411,7 +4412,8 @@ static void genOMPDispatch(lower::AbstractConverter &converter,
                    extractOnlyOmpNestedEval(eval)) {
       // Combinable constructs that are immediately nested with no other
       // statements or directives preventing them from being combined need the
-      // attribute as well.
+      // attribute as well. Disallow block constructs that can only be outermost
+      // leafs and loop transformation constructs.
       OmpDirectiveSet combinableDirs =
           (llvm::omp::blockConstructSet &
            ~OmpDirectiveSet{llvm::omp::Directive::OMPD_ordered,
