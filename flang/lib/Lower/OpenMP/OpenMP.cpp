@@ -285,16 +285,16 @@ private:
 ///
 /// The main entry point process() will call processDirective() for the
 /// OpenMP directive associated to the initial given evaluation based on whether
-/// it is part of the initialDirsToProcess() set. A nested OpenMP evaluation
-/// might optionally be also visited by the pattern if it meets all of the
-/// following conditions:
+/// it is part of the initialDirectivesToProcess() set. A nested OpenMP
+/// evaluation might optionally be also visited by the pattern if it meets all
+/// of the following conditions:
 ///   - It is the only nested evaluation, apart from an optional END statement
 ///     associated to the same directive.
 ///   - The OpenMP directive is part of the directive set returned by the
 ///     `processDirective` call for the parent.
 ///
 /// Subclasses define the expected pattern by implementing the
-/// initialDirsToProcess() and processDirective() methods, and users are
+/// initialDirectivesToProcess() and processDirective() methods, and users are
 /// expected to use process() to trigger the complete pattern visit.
 class OpenMPPatternProcessor {
 public:
@@ -304,13 +304,13 @@ public:
 
   /// Run the pattern from the given evaluation.
   void process(lower::pft::Evaluation &eval) {
-    dirsToProcess = initialDirsToProcess();
+    directivesToProcess = initialDirectivesToProcess();
     processEval(eval);
   }
 
 protected:
   /// Returns the set of directives of interest at the beginning of the pattern.
-  virtual OmpDirectiveSet initialDirsToProcess() const = 0;
+  virtual OmpDirectiveSet initialDirectivesToProcess() const = 0;
 
   /// Processes a single directive and, based on it, returns the set of other
   /// directives of interest that would be part of the pattern if nested inside
@@ -357,7 +357,8 @@ private:
     if (!ompEval)
       return false;
 
-    return dirsToProcess.test(parser::omp::GetOmpDirectiveName(*ompEval).v);
+    return directivesToProcess.test(
+        parser::omp::GetOmpDirectiveName(*ompEval).v);
   }
 
   /// Processes an evaluation and, potentially, recursively processes a single
@@ -378,11 +379,11 @@ private:
     if (processNested.empty())
       return;
 
-    if (lower::pft::Evaluation * nestedEval{extractOnlyOmpNestedEval(eval)}) {
-      OmpDirectiveSet prevDirs{dirsToProcess};
-      dirsToProcess = processNested;
+    if (lower::pft::Evaluation *nestedEval = extractOnlyOmpNestedEval(eval)) {
+      OmpDirectiveSet prevDirs{directivesToProcess};
+      directivesToProcess = processNested;
       processEval(*nestedEval);
-      dirsToProcess = prevDirs;
+      directivesToProcess = prevDirs;
     }
   }
 
@@ -409,7 +410,7 @@ protected:
   semantics::SemanticsContext &semaCtx;
 
 private:
-  OmpDirectiveSet dirsToProcess;
+  OmpDirectiveSet directivesToProcess;
 };
 
 /// Helper pattern to navigate target SPMD.
@@ -419,7 +420,7 @@ public:
   virtual ~TargetSPMDPatternProcessor() = default;
 
 protected:
-  virtual OmpDirectiveSet initialDirsToProcess() const override {
+  virtual OmpDirectiveSet initialDirectivesToProcess() const override {
     return llvm::omp::allTargetSet;
   }
 
