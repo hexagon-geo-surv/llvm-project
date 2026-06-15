@@ -520,6 +520,7 @@ static void fillAMDGCNFeatureMap(StringRef GPU, const Triple &T,
     Features["gfx12-insts"] = true;
     Features["atomic-fadd-rtn-insts"] = true;
     Features["image-insts"] = true;
+    Features["bvh-ray-tracing-insts"] = true;
     Features["cube-insts"] = true;
     Features["lerp-inst"] = true;
     Features["sad-insts"] = true;
@@ -554,6 +555,7 @@ static void fillAMDGCNFeatureMap(StringRef GPU, const Triple &T,
     Features["gfx11-insts"] = true;
     Features["atomic-fadd-rtn-insts"] = true;
     Features["image-insts"] = true;
+    Features["bvh-ray-tracing-insts"] = true;
     Features["cube-insts"] = true;
     Features["lerp-inst"] = true;
     Features["sad-insts"] = true;
@@ -597,6 +599,7 @@ static void fillAMDGCNFeatureMap(StringRef GPU, const Triple &T,
     Features["gfx11-insts"] = true;
     Features["atomic-fadd-rtn-insts"] = true;
     Features["image-insts"] = true;
+    Features["bvh-ray-tracing-insts"] = true;
     Features["cube-insts"] = true;
     Features["lerp-inst"] = true;
     Features["sad-insts"] = true;
@@ -633,6 +636,7 @@ static void fillAMDGCNFeatureMap(StringRef GPU, const Triple &T,
     Features["gfx10-insts"] = true;
     Features["gfx10-3-insts"] = true;
     Features["image-insts"] = true;
+    Features["bvh-ray-tracing-insts"] = true;
     Features["s-memrealtime"] = true;
     Features["s-memtime-inst"] = true;
     Features["gws"] = true;
@@ -660,6 +664,8 @@ static void fillAMDGCNFeatureMap(StringRef GPU, const Triple &T,
   case GK_GFX1013:
   case GK_GFX1010:
   case GK_GFX10_1_GENERIC:
+    if (Kind == GK_GFX1013)
+      Features["bvh-ray-tracing-insts"] = true;
     Features["dl-insts"] = true;
     Features["ci-insts"] = true;
     Features["16-bit-insts"] = true;
