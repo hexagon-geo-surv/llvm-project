@@ -161,7 +161,7 @@ namespace {
 /// information to later lowering stages.
 class HostEvalInfo {
 public:
-  friend class HostEvalPatternProcessor;
+  friend class HostEvalVisitor;
 
   /// Fill \c vars with values stored in \c ops.
   ///
@@ -283,40 +283,39 @@ private:
 /// A base class to help iterate over OpenMP constructs based on an expected
 /// sequence.
 ///
-/// The main entry point process() will call processDirective() for the
-/// OpenMP directive associated to the initial given evaluation based on whether
-/// it is part of the initialDirectivesToProcess() set. A nested OpenMP
-/// evaluation might optionally be also visited by the pattern if it meets all
-/// of the following conditions:
+/// The main entry point visit() will call visitDirective() for the OpenMP
+/// directive associated to the initial given evaluation based on whether it is
+/// part of the initialDirectives() set. A nested OpenMP evaluation might
+/// optionally be also visited by the pattern recursively if it meets all of the
+/// following conditions:
 ///   - It is the only nested evaluation, apart from an optional END statement
 ///     associated to the same directive.
 ///   - The OpenMP directive is part of the directive set returned by the
-///     `processDirective` call for the parent.
+///     `visitDirective` call for the parent.
 ///
 /// Subclasses define the expected pattern by implementing the
-/// initialDirectivesToProcess() and processDirective() methods, and users are
-/// expected to use process() to trigger the complete pattern visit.
-class OpenMPPatternProcessor {
+/// initialDirectives() and visitDirective() methods, and users are expected to
+/// use visit() to trigger the complete pattern visit.
+class DirectivePatternVisitor {
 public:
-  OpenMPPatternProcessor(semantics::SemanticsContext &semaCtx)
+  DirectivePatternVisitor(semantics::SemanticsContext &semaCtx)
       : semaCtx{semaCtx} {}
-  virtual ~OpenMPPatternProcessor() = default;
+  virtual ~DirectivePatternVisitor() = default;
 
   /// Run the pattern from the given evaluation.
-  void process(lower::pft::Evaluation &eval) {
-    directivesToProcess = initialDirectivesToProcess();
-    processEval(eval);
+  void visit(lower::pft::Evaluation &eval) {
+    directivesOfInterest = initialDirectives();
+    visitEval(eval);
   }
 
 protected:
   /// Returns the set of directives of interest at the beginning of the pattern.
-  virtual OmpDirectiveSet initialDirectivesToProcess() const = 0;
+  virtual OmpDirectiveSet initialDirectives() const = 0;
 
-  /// Processes a single directive and, based on it, returns the set of other
-  /// directives of interest that would be part of the pattern if nested inside
-  /// of it.
-  virtual OmpDirectiveSet processDirective(lower::pft::Evaluation &eval,
-                                           llvm::omp::Directive dir) = 0;
+  /// Visits a single directive and, based on it, returns the set of other
+  /// directives of interest that would be part of the pattern if nested inside.
+  virtual OmpDirectiveSet visitDirective(lower::pft::Evaluation &eval,
+                                         llvm::omp::Directive dir) = 0;
 
   /// Obtain the list of clauses of the given OpenMP block or loop construct
   /// evaluation. If it's not an OpenMP construct, no modifications are made to
@@ -348,42 +347,42 @@ protected:
   }
 
 private:
-  /// Decide whether an evaluation must be processed as part of the pattern.
+  /// Decide whether an evaluation must be visited as part of the pattern.
   ///
   /// This is the case whenever it's an OpenMP construct and the associated
   /// directive is part of the current set of directives of interest.
-  bool shouldProcessEval(lower::pft::Evaluation &eval) const {
+  bool shouldVisitEval(lower::pft::Evaluation &eval) const {
     const auto *ompEval{eval.getIf<parser::OpenMPConstruct>()};
     if (!ompEval)
       return false;
 
-    return directivesToProcess.test(
+    return directivesOfInterest.test(
         parser::omp::GetOmpDirectiveName(*ompEval).v);
   }
 
-  /// Processes an evaluation and, potentially, recursively processes a single
+  /// Visits an evaluation and, potentially, recursively visits a single
   /// nested evaluation.
   ///
-  /// For a nested evaluation to be recursively processed, it must be an OpenMP
+  /// For a nested evaluation to be recursively visited, it must be an OpenMP
   /// construct, have no sibling evaluations and match one of the
-  /// next-directives of interest set returned by a call to processDirective()
+  /// next-directives of interest set returned by a call to visitDirective()
   /// on the parent evaluation.
-  void processEval(lower::pft::Evaluation &eval) {
-    if (!shouldProcessEval(eval))
+  void visitEval(lower::pft::Evaluation &eval) {
+    if (!shouldVisitEval(eval))
       return;
 
     const auto &ompEval{eval.get<parser::OpenMPConstruct>()};
-    OmpDirectiveSet processNested{
-        processDirective(eval, parser::omp::GetOmpDirectiveName(ompEval).v)};
+    OmpDirectiveSet visitNested{
+        visitDirective(eval, parser::omp::GetOmpDirectiveName(ompEval).v)};
 
-    if (processNested.empty())
+    if (visitNested.empty())
       return;
 
     if (lower::pft::Evaluation *nestedEval = extractOnlyOmpNestedEval(eval)) {
-      OmpDirectiveSet prevDirs{directivesToProcess};
-      directivesToProcess = processNested;
-      processEval(*nestedEval);
-      directivesToProcess = prevDirs;
+      OmpDirectiveSet prevDirs{directivesOfInterest};
+      directivesOfInterest = visitNested;
+      visitEval(*nestedEval);
+      directivesOfInterest = prevDirs;
     }
   }
 
@@ -410,22 +409,22 @@ protected:
   semantics::SemanticsContext &semaCtx;
 
 private:
-  OmpDirectiveSet directivesToProcess;
+  OmpDirectiveSet directivesOfInterest;
 };
 
 /// Helper pattern to navigate target SPMD.
-class TargetSPMDPatternProcessor : public OpenMPPatternProcessor {
+class TargetSPMDVisitor : public DirectivePatternVisitor {
 public:
-  using OpenMPPatternProcessor::OpenMPPatternProcessor;
-  virtual ~TargetSPMDPatternProcessor() = default;
+  using DirectivePatternVisitor::DirectivePatternVisitor;
+  virtual ~TargetSPMDVisitor() = default;
 
 protected:
-  virtual OmpDirectiveSet initialDirectivesToProcess() const override {
+  virtual OmpDirectiveSet initialDirectives() const override {
     return llvm::omp::allTargetSet;
   }
 
-  virtual OmpDirectiveSet processDirective(lower::pft::Evaluation &,
-                                           llvm::omp::Directive dir) override {
+  virtual OmpDirectiveSet visitDirective(lower::pft::Evaluation &,
+                                         llvm::omp::Directive dir) override {
     using namespace llvm::omp;
 
     // The default implementation does nothing, except it returns the allowed
@@ -468,19 +467,19 @@ protected:
 /// operation, and also to be checked and used by later lowering steps to
 /// populate the corresponding operands of the \c omp.teams, \c omp.parallel or
 /// \c omp.loop_nest operations.
-class HostEvalPatternProcessor : public TargetSPMDPatternProcessor {
+class HostEvalVisitor : public TargetSPMDVisitor {
 public:
-  HostEvalPatternProcessor(lower::AbstractConverter &converter,
-                           semantics::SemanticsContext &semaCtx,
-                           lower::StatementContext &stmtCtx, mlir::Location loc,
-                           HostEvalInfo &hostEvalInfo)
-      : TargetSPMDPatternProcessor{semaCtx}, converter{converter},
-        stmtCtx{stmtCtx}, loc{loc}, hostEvalInfo{hostEvalInfo} {}
-  virtual ~HostEvalPatternProcessor() = default;
+  HostEvalVisitor(lower::AbstractConverter &converter,
+                  semantics::SemanticsContext &semaCtx,
+                  lower::StatementContext &stmtCtx, mlir::Location loc,
+                  HostEvalInfo &hostEvalInfo)
+      : TargetSPMDVisitor{semaCtx}, converter{converter}, stmtCtx{stmtCtx},
+        loc{loc}, hostEvalInfo{hostEvalInfo} {}
+  virtual ~HostEvalVisitor() = default;
 
 protected:
-  virtual OmpDirectiveSet processDirective(lower::pft::Evaluation &eval,
-                                           llvm::omp::Directive dir) override {
+  virtual OmpDirectiveSet visitDirective(lower::pft::Evaluation &eval,
+                                         llvm::omp::Directive dir) override {
     using namespace llvm::omp;
 
     List<lower::omp::Clause> clauses;
@@ -575,7 +574,7 @@ protected:
     }
 
     // Visit nested directives as per the SPMD pattern.
-    return TargetSPMDPatternProcessor::processDirective(eval, dir);
+    return TargetSPMDVisitor::visitDirective(eval, dir);
   }
 
 private:
@@ -587,26 +586,30 @@ private:
 
 /// Checks target regions and, based on the directives and clauses encountered,
 /// determines its associated kernel type.
-class KernelTypePatternProcessor : protected TargetSPMDPatternProcessor {
+class KernelTypeVisitor : protected TargetSPMDVisitor {
 public:
-  KernelTypePatternProcessor(semantics::SemanticsContext &semaCtx,
-                             mlir::ModuleOp moduleOp)
-      : TargetSPMDPatternProcessor{semaCtx}, moduleOp{moduleOp} {}
-  virtual ~KernelTypePatternProcessor() = default;
+  KernelTypeVisitor(semantics::SemanticsContext &semaCtx,
+                    mlir::ModuleOp moduleOp)
+      : TargetSPMDVisitor{semaCtx}, moduleOp{moduleOp} {}
+  virtual ~KernelTypeVisitor() = default;
 
   /// Executes the pattern and returns the kernel type of the given target
   /// region, or \c mlir::omp::TargetExecMode::generic by default for non-target
   /// evaluations.
   mlir::omp::TargetExecMode getKernelType(lower::pft::Evaluation &eval) {
     execMode = mlir::omp::TargetExecMode::generic;
-    process(eval);
+    visit(eval);
     return execMode;
   }
 
 protected:
-  virtual OmpDirectiveSet processDirective(lower::pft::Evaluation &eval,
-                                           llvm::omp::Directive dir) override {
+  virtual OmpDirectiveSet visitDirective(lower::pft::Evaluation &eval,
+                                         llvm::omp::Directive dir) override {
     using namespace llvm::omp;
+
+    // We know this to be the case because any changes to the exec mode are made
+    // only when we know for sure what it is, so pattern matching is always
+    // stopped at these points.
     assert(execMode == mlir::omp::TargetExecMode::generic &&
            "unexpected non-default exec mode during pattern match");
 
@@ -647,7 +650,7 @@ protected:
     }
 
     // Visit nested directives as per the SPMD pattern.
-    return TargetSPMDPatternProcessor::processDirective(eval, dir);
+    return TargetSPMDVisitor::visitDirective(eval, dir);
   }
 
 private:
@@ -2212,9 +2215,8 @@ genTargetClauses(lower::AbstractConverter &converter,
   cp.processHasDeviceAddr(stmtCtx, clauseOps, hasDeviceAddrObjects);
   if (HostEvalInfo *hostEvalInfo = getHostEvalInfoStackTop(converter)) {
     // Only process host_eval if compiling for the host device.
-    HostEvalPatternProcessor processor(converter, semaCtx, stmtCtx, loc,
-                                       *hostEvalInfo);
-    processor.process(eval);
+    HostEvalVisitor visitor(converter, semaCtx, stmtCtx, loc, *hostEvalInfo);
+    visitor.visit(eval);
     hostEvalInfo->collectValues(clauseOps.hostEvalVars);
   }
   cp.processIf(llvm::omp::Directive::OMPD_target, clauseOps);
@@ -3266,9 +3268,9 @@ genTargetOp(lower::AbstractConverter &converter, lower::SymMap &symTable,
                    loc, clauseOps, defaultMaps, hasDeviceAddrObjects,
                    isDevicePtrObjects, mapObjects);
 
-  KernelTypePatternProcessor processor(semaCtx, converter.getModuleOp());
+  KernelTypeVisitor visitor(semaCtx, converter.getModuleOp());
   clauseOps.kernelType = mlir::omp::TargetExecModeAttr::get(
-      &converter.getMLIRContext(), processor.getKernelType(eval));
+      &converter.getMLIRContext(), visitor.getKernelType(eval));
 
   if (!isDevicePtrObjects.empty()) {
     // is_device_ptr maps get duplicated so the clause and synthesized
