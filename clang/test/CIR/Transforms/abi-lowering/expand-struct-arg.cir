@@ -263,4 +263,18 @@ cir.func @sret_and_expand(%arg0: !rec_TwoLong) -> !rec_TwoLong
 // CHECK:         %[[P1:.*]] = cir.get_member %[[S]][1]
 // CHECK:         cir.store %[[F1]], %[[P1]] : !s64i, !cir.ptr<!s64i>
 
+// The block arg has no spill store (e.g. DCE removed it): the signature is
+// still flattened to scalar field args, but no get_member/store is emitted.
+
+cir.func @takes_two_long_unused(%arg0: !rec_TwoLong)
+    attributes { test_classify = #expand_two } {
+  cir.return
+}
+
+// CHECK-LABEL: cir.func{{.*}} @takes_two_long_unused(
+// CHECK-SAME:    %{{.*}}: !s64i, %{{.*}}: !s64i)
+// CHECK-NOT:     cir.get_member
+// CHECK-NOT:     cir.store
+// CHECK:         cir.return
+
 }

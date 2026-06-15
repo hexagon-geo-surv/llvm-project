@@ -378,28 +378,48 @@ void insertArgCoercion(FunctionOpInterface funcOp,
 
       // CIRGen spills every by-value struct parameter into its local alloca
       // with a single store before any other use, so the struct block arg's
-      // only use is that store.  Capture it and the destination alloca, then
-      // store the expanded fields straight into that alloca and erase the
-      // original store.  This keeps the alloca's variable name and `init`
-      // flag and avoids a reassemble-then-reload roundtrip.
-      assert(origArg.hasOneUse() &&
-             "Expand arg must have exactly one use (the CIRGen param spill)");
-      auto paramStore = cast<cir::StoreOp>(*origArg.user_begin());
-      assert(paramStore.getValue() == origArg &&
-             "Expand arg's use must be the value operand of its store");
-      auto destAlloca =
-          cast<cir::AllocaOp>(paramStore.getAddr().getDefiningOp());
+      // only use is that spill.  Capture it and the destination alloca so the
+      // expanded fields can be stored straight into that alloca, preserving
+      // the alloca's variable name and `init` flag and avoiding a
+      // reassemble-then-reload roundtrip.  DCE may have run earlier and
+      // removed the spill (leaving the block arg unused); tolerate that by
+      // only flattening the signature and emitting no field stores.
+      cir::StoreOp paramStore;
+      cir::AllocaOp destAlloca;
+      if (!origArg.use_empty()) {
+        assert(origArg.hasOneUse() &&
+               "Expand arg must have exactly one use (the CIRGen param spill)");
+        paramStore = cast<cir::StoreOp>(*origArg.user_begin());
+        assert(paramStore.getValue() == origArg &&
+               "Expand arg's use must be the value operand of its store");
+        destAlloca = cast<cir::AllocaOp>(paramStore.getAddr().getDefiningOp());
+      }
 
-      // Split the single struct block arg into N scalar field block args:
-      // slot 0 becomes field 0; insert slots 1..N-1 after it.
-      origArg.setType(recTy.getElementType(0));
-      for (unsigned f = 1; f < numFields; ++f)
-        entry.insertArgument(blockArgIdx + f, recTy.getElementType(f), loc);
+      // Erase the original whole-struct spill before retyping the block
+      // argument, so the store is never left feeding a type-mismatched value.
+      // The field stores take its place, just before the following operation
+      // (the spill always precedes the entry block's terminator).
+      Operation *fieldStoreInsertPt = nullptr;
+      if (paramStore) {
+        fieldStoreInsertPt = paramStore->getNextNode();
+        assert(fieldStoreInsertPt &&
+               "param spill must be followed by a block terminator");
+        paramStore->erase();
+      }
 
-      // Emit one get_member + store per field at the original spill's
-      // position, then drop the original whole-struct store.
-      rewriter.setInsertionPoint(paramStore);
+      // Split the single struct block arg into N scalar field block args (slot
+      // 0 reuses the original; slots 1..N-1 are inserted after it) and, when
+      // the spill survived, store each field straight into the parameter
+      // alloca.
+      if (fieldStoreInsertPt)
+        rewriter.setInsertionPoint(fieldStoreInsertPt);
       for (auto [f, fieldTy] : llvm::enumerate(recTy.getMembers())) {
+        if (f == 0)
+          origArg.setType(fieldTy);
+        else
+          entry.insertArgument(blockArgIdx + f, fieldTy, loc);
+        if (!destAlloca)
+          continue;
         Type fieldPtrTy = cir::PointerType::get(fieldTy);
         auto fieldPtr = cir::GetMemberOp::create(rewriter, loc, fieldPtrTy,
                                                  destAlloca, /*name=*/"",
@@ -407,7 +427,6 @@ void insertArgCoercion(FunctionOpInterface funcOp,
         cir::StoreOp::create(rewriter, loc, entry.getArgument(blockArgIdx + f),
                              fieldPtr);
       }
-      paramStore->erase();
 
       blockArgIdx += numFields;
       continue;
