@@ -408,10 +408,13 @@ void insertArgCoercion(FunctionOpInterface funcOp,
       }
 
       // Split the single struct block arg into N scalar field block args (slot
-      // 0 reuses the original; slots 1..N-1 are inserted after it) and, when
-      // the spill survived, store each field straight into the parameter
-      // alloca.
-      if (fieldStoreInsertPt)
+      // 0 reuses the original; slots 1..N-1 are inserted after it).  The
+      // reshape needs no insertion point.  The field stores are gated on the
+      // same destAlloca condition: when the spill survived we set the insert
+      // point to its old slot (which sits after the CIRGen allocas) and store
+      // each field there; when DCE removed the spill the parameter is dead, so
+      // we only reshape the signature and emit no stores.
+      if (destAlloca)
         rewriter.setInsertionPoint(fieldStoreInsertPt);
       for (auto [f, fieldTy] : llvm::enumerate(recTy.getMembers())) {
         if (f == 0)
