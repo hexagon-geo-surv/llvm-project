@@ -671,6 +671,9 @@ def CIR_LoadOp : CIR_Op<"load", [
     `alignment` can be used to specify an alignment that's different from the
     default, which is computed from `result`'s type ABI data layout.
 
+    A unit attribute `invariant` can be used to indicate that the loaded memory
+    never changes, mapping to LLVM IR's `!invariant.load` metadata.
+
     Example:
 
     ```
@@ -685,6 +688,9 @@ def CIR_LoadOp : CIR_Op<"load", [
     // Perform a volatile load from address in %0.
     %4 = cir.load volatile %0 : !cir.ptr<i32>, i32
 
+    // Perform an invariant load from address in %0.
+    %5 = cir.load invariant %0 : !cir.ptr<i32>, i32
+
     // Others
     %x = cir.load align(16) atomic(seq_cst) %0 : !cir.ptr<i32>, i32
     ```
@@ -696,12 +702,14 @@ def CIR_LoadOp : CIR_Op<"load", [
                        UnitAttr:$is_volatile,
                        OptionalAttr<I64Attr>:$alignment,
                        OptionalAttr<CIR_SyncScopeKind>:$sync_scope,
-                       OptionalAttr<CIR_MemOrder>:$mem_order);
+                       OptionalAttr<CIR_MemOrder>:$mem_order,
+                       UnitAttr:$invariant);
   let results = (outs CIR_AnyType:$result);
 
   let assemblyFormat = [{
     (`deref` $isDeref^)?
     (`volatile` $is_volatile^)?
+    (`invariant` $invariant^)?
     (`align` `(` $alignment^ `)`)?
     (`syncscope` `(` $sync_scope^ `)`)?
     (`atomic` `(` $mem_order^ `)`)?

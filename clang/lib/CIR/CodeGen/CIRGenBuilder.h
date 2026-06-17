@@ -582,7 +582,8 @@ public:
     return cir::LoadOp::create(*this, loc, addr.getPointer(), /*isDeref=*/false,
                                isVolatile, /*alignment=*/align,
                                /*sync_scope=*/cir::SyncScopeKindAttr{},
-                               /*mem_order=*/cir::MemOrderAttr{});
+                               /*mem_order=*/cir::MemOrderAttr{},
+                               /*invariant=*/false);
   }
 
   cir::LoadOp createAlignedLoad(mlir::Location loc, mlir::Type ty,
@@ -594,7 +595,8 @@ public:
     return cir::LoadOp::create(*this, loc, ptr, /*isDeref=*/false,
                                /*isVolatile=*/false, alignAttr,
                                /*sync_scope=*/cir::SyncScopeKindAttr{},
-                               /*mem_order=*/cir::MemOrderAttr{});
+                               /*mem_order=*/cir::MemOrderAttr{},
+                               /*invariant=*/false);
   }
 
   cir::LoadOp

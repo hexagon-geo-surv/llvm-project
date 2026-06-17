@@ -980,7 +980,8 @@ public:
         auto loaded = cir::LoadOp::create(
             rewriter, loc, alloca, /*isDeref=*/false,
             /*isVolatile=*/false, /*alignment=*/mlir::IntegerAttr(),
-            cir::SyncScopeKindAttr(), cir::MemOrderAttr());
+            cir::SyncScopeKindAttr(), cir::MemOrderAttr(),
+            /*invariant=*/false);
         returnValues.push_back(loaded);
       }
     }
@@ -1293,7 +1294,8 @@ public:
         auto slotValue = cir::LoadOp::create(
             rewriter, loc, destSlot, /*isDeref=*/false,
             /*isVolatile=*/false, /*alignment=*/mlir::IntegerAttr(),
-            cir::SyncScopeKindAttr(), cir::MemOrderAttr());
+            cir::SyncScopeKindAttr(), cir::MemOrderAttr(),
+            /*invariant=*/false);
 
         // Create destination blocks for each exit and collect switch case info.
         llvm::SmallVector<mlir::APInt, 8> caseValues;
