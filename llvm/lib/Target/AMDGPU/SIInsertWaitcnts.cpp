@@ -1552,8 +1552,8 @@ bool WaitcntBrackets::counterOutOfOrder(AMDGPU::InstCounterType T) const {
 
     HWEvents Events = PendingEvents & Context->getWaitEvents(T);
 
-    // GLOBAL_INV completes in-order with other LOAD_CNT events
-    // (VMEM_READ_ACCESS), so having GLOBAL_INV_ACCESS mixed with other LOAD_CNT
+    // GLOBAL_INV completes in-order with other LOAD_CNT events,
+    // so having GLOBAL_INV_ACCESS mixed with other LOAD_CNT
     // events doesn't cause out-of-order completion.
     Events = Events.without(HWEvents::GLOBAL_INV_ACCESS);
 
