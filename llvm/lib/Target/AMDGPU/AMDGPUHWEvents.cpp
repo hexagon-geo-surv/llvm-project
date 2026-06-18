@@ -69,8 +69,9 @@ static HWEvents getVmemHWEvent(const MachineInstr &Inst, const GCNSubtarget &ST,
   assert(SIInstrInfo::isVMEM(Inst));
   // LDS DMA loads are also stores, but on the LDS side. On the VMEM side
   // these should use VM_CNT.
-  if (!ST.hasVscnt() || SIInstrInfo::mayWriteLDSThroughDMA(Inst))
-    return HWEvents::VMEM_ACCESS;
+  if (SIInstrInfo::mayWriteLDSThroughDMA(Inst))
+    return HWEvents::VMEM_READ_ACCESS;
+
   if (Inst.mayStore() &&
       (!Inst.mayLoad() || SIInstrInfo::isAtomicNoRet(Inst))) {
     if (TII.mayAccessScratch(Inst))
@@ -78,7 +79,7 @@ static HWEvents getVmemHWEvent(const MachineInstr &Inst, const GCNSubtarget &ST,
     return HWEvents::VMEM_WRITE_ACCESS;
   }
   if (!ST.hasExtendedWaitCounts() || SIInstrInfo::isFLAT(Inst))
-    return HWEvents::VMEM_ACCESS;
+    return HWEvents::VMEM_READ_ACCESS;
 
   if (SIInstrInfo::isImage(Inst)) {
     const AMDGPU::MIMGInfo *Info = AMDGPU::getMIMGInfo(Inst.getOpcode());
@@ -95,7 +96,7 @@ static HWEvents getVmemHWEvent(const MachineInstr &Inst, const GCNSubtarget &ST,
       return HWEvents::VMEM_SAMPLER_READ_ACCESS;
   }
 
-  return HWEvents::VMEM_ACCESS;
+  return HWEvents::VMEM_READ_ACCESS;
 }
 
 static HWEvents getEventsForImpl(const MachineInstr &Inst,
