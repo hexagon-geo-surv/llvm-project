@@ -670,6 +670,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAMDGPUTarget() {
   initializeSIFixVGPRCopiesLegacyPass(*PR);
   initializeSIFoldOperandsLegacyPass(*PR);
   initializeSIPeepholeSDWALegacyPass(*PR);
+  initializeSIPromoteGlobalLoadSAddrPass(*PR);
   initializeSIShrinkInstructionsLegacyPass(*PR);
   initializeSIOptimizeExecMaskingPreRALegacyPass(*PR);
   initializeSIOptimizeVGPRLiveRangeLegacyPass(*PR);
@@ -1644,6 +1645,7 @@ void GCNPassConfig::addMachineSSAOptimization() {
   addPass(&SIFoldOperandsLegacyID);
   if (EnableDPPCombine)
     addPass(&GCNDPPCombineLegacyID);
+  addPass(createSIPromoteGlobalLoadSAddrPass());
   addPass(&SILoadStoreOptimizerLegacyID);
   if (isPassEnabled(EnableSDWAPeephole)) {
     addPass(&SIPeepholeSDWALegacyID);

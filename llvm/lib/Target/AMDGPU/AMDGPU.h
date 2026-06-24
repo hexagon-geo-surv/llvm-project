@@ -40,6 +40,7 @@ FunctionPass *createGCNDPPCombinePass();
 FunctionPass *createSIAnnotateControlFlowLegacyPass();
 FunctionPass *createSIFoldOperandsLegacyPass();
 FunctionPass *createSIPeepholeSDWALegacyPass();
+FunctionPass *createSIPromoteGlobalLoadSAddrPass();
 FunctionPass *createSILowerI1CopiesLegacyPass();
 FunctionPass *createSIShrinkInstructionsLegacyPass();
 FunctionPass *createSILoadStoreOptimizerLegacyPass();
@@ -188,6 +189,8 @@ void initializeSIFoldOperandsLegacyPass(PassRegistry &);
 extern char &SIFoldOperandsLegacyID;
 
 void initializeSIPeepholeSDWALegacyPass(PassRegistry &);
+void initializeSIPromoteGlobalLoadSAddrPass(PassRegistry &);
+extern char &SIPromoteGlobalLoadSAddrID;
 extern char &SIPeepholeSDWALegacyID;
 
 void initializeSIShrinkInstructionsLegacyPass(PassRegistry &);
