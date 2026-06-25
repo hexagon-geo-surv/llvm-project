@@ -96,10 +96,10 @@ MAP = {cpu: subarch(cpu) for cpu in GFX}
 for alias, canon in ALIASES.items():
     MAP[alias] = MAP[canon]
 
-# -mcpu=<cpu> where <cpu> has no trailing ':feature' suffix.
-MCPU_RE = re.compile(r'-mcpu=([A-Za-z0-9]+)(?![\w:.-])')
-# -mtriple=amdgcn used as the arch token (followed by '-', whitespace, or EOL).
-MTRIPLE_RE = re.compile(r'(-mtriple=)amdgcn(?=[-\s]|$)')
+# -mcpu=<cpu> (also --mcpu=) where <cpu> has no trailing ':feature' suffix.
+MCPU_RE = re.compile(r'(?<!-)--?mcpu=([A-Za-z0-9]+)(?![\w:.-])')
+# -mtriple=amdgcn (also --mtriple=) used as the arch token.
+MTRIPLE_RE = re.compile(r'(?<!-)(--?mtriple=)amdgcn(?=[-\s]|$)')
 
 
 # A RUN line drives opt (and not llc) -- safe to rename the bare arch even
@@ -118,11 +118,10 @@ def rewrite_run_line(line, bare_arch="amdgpu"):
     if len(mcpus) == 1 and len(mtriples) == 1 and mcpus[0] in MAP:
         cpu = mcpus[0]
         line = MTRIPLE_RE.sub(r'\g<1>' + MAP[cpu], line)
-        # Drop the -mcpu token, absorbing one adjacent space.
-        line = re.sub(r'\s-mcpu=' + re.escape(cpu) + r'(?![\w:.-])', '', line,
-                      count=1)
-        line = re.sub(r'-mcpu=' + re.escape(cpu) + r'(?![\w:.-])\s?', '', line,
-                      count=1)
+        # Drop the -mcpu/--mcpu token, absorbing one adjacent space.
+        mcpu_tok = r'(?<!-)--?mcpu=' + re.escape(cpu) + r'(?![\w:.-])'
+        line = re.sub(r'\s' + mcpu_tok, '', line, count=1)
+        line = re.sub(mcpu_tok + r'\s?', '', line, count=1)
         return line
     # Otherwise, for opt-only lines, rename the bare amdgcn arch without
     # touching any -mcpu. The replacement is normally the bare "amdgpu" alias,
