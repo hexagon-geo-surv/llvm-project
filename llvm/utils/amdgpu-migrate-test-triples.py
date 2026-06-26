@@ -92,12 +92,25 @@ def subarch(cpu):
     return "amdgpu%s.%s" % (n[:-2], n[-2:])
 
 
+# Generic targets map to "major subarch" triples (no minor version).
+GENERICS = {
+    "gfx9-generic": "amdgpu9",
+    "gfx9-4-generic": "amdgpu9.4",
+    "gfx10-1-generic": "amdgpu10.1",
+    "gfx10-3-generic": "amdgpu10.3",
+    "gfx11-generic": "amdgpu11",
+    "gfx12-generic": "amdgpu12",
+    "gfx12-5-generic": "amdgpu12.5",
+}
+
 MAP = {cpu: subarch(cpu) for cpu in GFX}
 for alias, canon in ALIASES.items():
     MAP[alias] = MAP[canon]
+MAP.update(GENERICS)
 
 # -mcpu=<cpu> (also --mcpu=) where <cpu> has no trailing ':feature' suffix.
-MCPU_RE = re.compile(r'(?<!-)--?mcpu=([A-Za-z0-9]+)(?![\w:.-])')
+# The cpu may contain hyphens (e.g. the gfx9-4-generic targets).
+MCPU_RE = re.compile(r'(?<!-)--?mcpu=([A-Za-z0-9][A-Za-z0-9-]*)(?![\w:.])')
 # -mtriple=amdgcn (also --mtriple=) used as the arch token.
 MTRIPLE_RE = re.compile(r'(?<!-)(--?mtriple=)amdgcn(?=[-\s]|$)')
 
