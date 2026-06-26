@@ -170,7 +170,10 @@ def process(path, dry_run=False):
     out = []
     changed = False
     for line in text.splitlines(keepends=True):
-        if 'RUN:' in line and re.search(r'--?m?triple=amdgcn', line):
+        # Match active RUN: lines as well as disabled variants (e.g. XUN:, xUN:,
+        # RUNX:) -- commented-out RUN lines kept for future re-enabling.
+        is_run = re.search(r'\b(RUN|XUN|xUN|RUNX):', line) is not None
+        if is_run and re.search(r'--?m?triple=amdgcn', line):
             new = rewrite_run_line(line, bare_arch)
             if new != line:
                 changed = True
