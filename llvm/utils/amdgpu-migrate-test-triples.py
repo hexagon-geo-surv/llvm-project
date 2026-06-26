@@ -111,8 +111,9 @@ MAP.update(GENERICS)
 # -mcpu=<cpu> (also --mcpu=) where <cpu> has no trailing ':feature' suffix.
 # The cpu may contain hyphens (e.g. the gfx9-4-generic targets).
 MCPU_RE = re.compile(r'(?<!-)--?mcpu=([A-Za-z0-9][A-Za-z0-9-]*)(?![\w:.])')
-# -mtriple=amdgcn (also --mtriple=) used as the arch token.
-MTRIPLE_RE = re.compile(r'(?<!-)(--?mtriple=)amdgcn(?=[-\s]|$)')
+# amdgcn arch token in a triple flag. Matches the llc/opt -mtriple= and
+# --mtriple= forms as well as the llvm-objdump --triple= form.
+MTRIPLE_RE = re.compile(r'(?<!-)(--?m?triple=)amdgcn(?=[-\s]|$)')
 
 
 # A RUN line drives opt (and not llc) -- safe to rename the bare arch even
@@ -126,15 +127,18 @@ def is_opt_only_line(line):
 def rewrite_run_line(line, bare_arch="amdgpu"):
     mcpus = MCPU_RE.findall(line)
     mtriples = MTRIPLE_RE.findall(line)
-    # Fold a single amdgcn triple + single plain-gfx -mcpu into the subarch
-    # triple (applies to both llc and opt).
-    if len(mcpus) == 1 and len(mtriples) == 1 and mcpus[0] in MAP:
+    # Fold amdgcn triple(s) + -mcpu(s) into the subarch triple. A RUN line may
+    # pipe several tools (e.g. opt | llc, or llc | llvm-objdump), each carrying
+    # its own matching -mtriple/--triple and -mcpu. Fold them when there is one
+    # amdgcn triple per -mcpu and every -mcpu names the same foldable target.
+    if (mcpus and mtriples and len(mcpus) == len(mtriples)
+            and len(set(mcpus)) == 1 and mcpus[0] in MAP):
         cpu = mcpus[0]
         line = MTRIPLE_RE.sub(r'\g<1>' + MAP[cpu], line)
-        # Drop the -mcpu/--mcpu token, absorbing one adjacent space.
+        # Drop every -mcpu/--mcpu=<cpu> token, absorbing one adjacent space.
         mcpu_tok = r'(?<!-)--?mcpu=' + re.escape(cpu) + r'(?![\w:.-])'
-        line = re.sub(r'\s' + mcpu_tok, '', line, count=1)
-        line = re.sub(mcpu_tok + r'\s?', '', line, count=1)
+        line = re.sub(r'\s' + mcpu_tok, '', line)
+        line = re.sub(mcpu_tok + r'\s?', '', line)
         return line
     # Otherwise, for opt-only lines, rename the bare amdgcn arch without
     # touching any -mcpu. The replacement is normally the bare "amdgpu" alias,
@@ -166,7 +170,7 @@ def process(path, dry_run=False):
     out = []
     changed = False
     for line in text.splitlines(keepends=True):
-        if 'RUN:' in line and '-mtriple=amdgcn' in line:
+        if 'RUN:' in line and re.search(r'--?m?triple=amdgcn', line):
             new = rewrite_run_line(line, bare_arch)
             if new != line:
                 changed = True
