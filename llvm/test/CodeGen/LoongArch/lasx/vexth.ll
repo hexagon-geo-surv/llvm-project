@@ -56,24 +56,7 @@ define void @vexth_w_h(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_w_h:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    xvld $xr0, $a0, 0
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 4
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 0
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 5
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 1
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 6
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 2
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 7
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 3
-; CHECK-NEXT:    xvpermi.d $xr0, $xr0, 14
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 4
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 4
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 5
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 5
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 6
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 6
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 7
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 7
-; CHECK-NEXT:    vext2xv.w.h $xr0, $xr1
+; CHECK-NEXT:    xvexth.w.h $xr0, $xr0
 ; CHECK-NEXT:    xvst $xr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -89,15 +72,7 @@ define void @vexth_d_w(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_d_w:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    xvld $xr0, $a0, 0
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 2
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 0
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 3
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 1
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 6
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 2
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 7
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 3
-; CHECK-NEXT:    vext2xv.d.w $xr0, $xr1
+; CHECK-NEXT:    xvexth.d.w $xr0, $xr0
 ; CHECK-NEXT:    xvst $xr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -163,24 +138,7 @@ define void @vexth_wu_hu(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_wu_hu:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    xvld $xr0, $a0, 0
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 4
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 0
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 5
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 1
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 6
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 2
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 7
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 3
-; CHECK-NEXT:    xvpermi.d $xr0, $xr0, 14
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 4
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 4
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 5
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 5
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 6
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 6
-; CHECK-NEXT:    vpickve2gr.h $a0, $vr0, 7
-; CHECK-NEXT:    vinsgr2vr.h $vr1, $a0, 7
-; CHECK-NEXT:    vext2xv.wu.hu $xr0, $xr1
+; CHECK-NEXT:    xvexth.wu.hu $xr0, $xr0
 ; CHECK-NEXT:    xvst $xr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -196,15 +154,7 @@ define void @vexth_du_wu(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_du_wu:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    xvld $xr0, $a0, 0
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 2
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 0
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 3
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 1
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 6
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 2
-; CHECK-NEXT:    xvpickve2gr.w $a0, $xr0, 7
-; CHECK-NEXT:    vinsgr2vr.w $vr1, $a0, 3
-; CHECK-NEXT:    vext2xv.du.wu $xr0, $xr1
+; CHECK-NEXT:    xvexth.du.wu $xr0, $xr0
 ; CHECK-NEXT:    xvst $xr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:

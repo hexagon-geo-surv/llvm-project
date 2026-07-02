@@ -6,9 +6,7 @@ define void @vexth_h_b(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_h_b:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vld $vr0, $a0, 0
-; CHECK-NEXT:    vbsrl.v $vr0, $vr0, 8
-; CHECK-NEXT:    vslti.b $vr1, $vr0, 0
-; CHECK-NEXT:    vilvl.b $vr0, $vr1, $vr0
+; CHECK-NEXT:    vexth.h.b $vr0, $vr0
 ; CHECK-NEXT:    vst $vr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -24,9 +22,7 @@ define void @vexth_w_h(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_w_h:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vld $vr0, $a0, 0
-; CHECK-NEXT:    vbsrl.v $vr0, $vr0, 8
-; CHECK-NEXT:    vslti.h $vr1, $vr0, 0
-; CHECK-NEXT:    vilvl.h $vr0, $vr1, $vr0
+; CHECK-NEXT:    vexth.w.h $vr0, $vr0
 ; CHECK-NEXT:    vst $vr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -41,9 +37,7 @@ define void @vexth_d_w(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_d_w:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vld $vr0, $a0, 0
-; CHECK-NEXT:    vshuf4i.w $vr0, $vr0, 14
-; CHECK-NEXT:    vslti.w $vr1, $vr0, 0
-; CHECK-NEXT:    vilvl.w $vr0, $vr1, $vr0
+; CHECK-NEXT:    vexth.d.w $vr0, $vr0
 ; CHECK-NEXT:    vst $vr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -58,8 +52,7 @@ define void @vexth_hu_bu(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_hu_bu:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vld $vr0, $a0, 0
-; CHECK-NEXT:    vrepli.b $vr1, 0
-; CHECK-NEXT:    vilvh.b $vr0, $vr1, $vr0
+; CHECK-NEXT:    vexth.hu.bu $vr0, $vr0
 ; CHECK-NEXT:    vst $vr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -75,8 +68,7 @@ define void @vexth_wu_hu(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_wu_hu:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vld $vr0, $a0, 0
-; CHECK-NEXT:    vrepli.b $vr1, 0
-; CHECK-NEXT:    vilvh.h $vr0, $vr1, $vr0
+; CHECK-NEXT:    vexth.wu.hu $vr0, $vr0
 ; CHECK-NEXT:    vst $vr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
@@ -91,8 +83,7 @@ define void @vexth_du_wu(ptr %a, ptr %r) nounwind {
 ; CHECK-LABEL: vexth_du_wu:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vld $vr0, $a0, 0
-; CHECK-NEXT:    vrepli.b $vr1, 0
-; CHECK-NEXT:    vilvh.w $vr0, $vr1, $vr0
+; CHECK-NEXT:    vexth.du.wu $vr0, $vr0
 ; CHECK-NEXT:    vst $vr0, $a1, 0
 ; CHECK-NEXT:    ret
 entry:
