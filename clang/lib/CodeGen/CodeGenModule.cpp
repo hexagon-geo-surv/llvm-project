@@ -1484,11 +1484,15 @@ void CodeGenModule::Release() {
 
     if (LangOpts.PointerAuthELFGOT)
       getModule().addModuleFlag(llvm::Module::Error, "ptrauth-elf-got", 1);
-    if (LangOpts.PointerAuthCalls && LangOpts.PointerAuthInitFini) {
-      getModule().addModuleFlag(llvm::Module::Error, "ptrauth-init-fini", 1);
-      if (LangOpts.PointerAuthInitFiniAddressDiscrimination)
-        getModule().addModuleFlag(
-            llvm::Module::Error, "ptrauth-init-fini-address-discrimination", 1);
+
+    if (T.isAArch64()) {
+      getModule().addModuleFlag(llvm::Module::Error, "ptrauth-init-fini",
+                                LangOpts.PointerAuthCalls &&
+                                    LangOpts.PointerAuthInitFini);
+      getModule().addModuleFlag(
+          llvm::Module::Error, "ptrauth-init-fini-address-discrimination",
+          LangOpts.PointerAuthCalls && LangOpts.PointerAuthInitFini &&
+              LangOpts.PointerAuthInitFiniAddressDiscrimination);
     }
 
     if (getTriple().isOSLinux()) {
