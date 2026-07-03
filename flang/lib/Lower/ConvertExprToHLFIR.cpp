@@ -35,14 +35,9 @@
 #include "mlir/IR/IRMapping.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
-#include "llvm/Support/CommandLine.h"
 #include <optional>
 
 namespace {
-
-static llvm::cl::opt<bool> enableSplitSumExpressionTreeLowering(
-    "enable-split-sum-expression-tree-lowering", llvm::cl::Hidden,
-    llvm::cl::desc("Enable experimental split sum expression tree lowering"));
 
 // This was modelled after isParenthesizedVariable()
 template <typename T>
@@ -2430,7 +2425,7 @@ hlfir::EntityWithAttributes Fortran::lower::convertAssignmentRhsToHLFIR(
     mlir::Location loc, Fortran::lower::AbstractConverter &converter,
     const Fortran::lower::SomeExpr &lhs, const Fortran::lower::SomeExpr &rhs,
     Fortran::lower::SymMap &symMap, Fortran::lower::StatementContext &stmtCtx) {
-  if (enableSplitSumExpressionTreeLowering &&
+  if (converter.getLoweringOptions().getSplitSumExpressionTree() &&
       canBuildSplitSumExpressionTree(lhs, rhs))
     if (std::optional<Fortran::lower::SomeExpr> rewritten =
             tryBuildSplitSumExpressionTree(lhs, rhs))
