@@ -164,6 +164,15 @@ static void maybeFreeRetconStorage(IRBuilder<> &Builder,
   Shape.emitDealloc(Builder, FramePtr, CG);
 }
 
+/// Create a pointer to the switch destroy function field in the coroutine
+/// frame.
+static Value *createSwitchDestroyPtr(const coro::Shape &Shape,
+                                     IRBuilder<> &Builder, Value *FramePtr) {
+  auto *Offset = ConstantInt::get(Type::getInt64Ty(FramePtr->getContext()),
+                                  Shape.SwitchLowering.DestroyOffset);
+  return Builder.CreateInBoundsPtrAdd(FramePtr, Offset, "destroy.addr");
+}
+
 /// Replace an llvm.coro.end.async.
 /// Will inline the must tail call function call if there is one.
 /// \returns true if cleanup of the coro.end block is needed, false otherwise.
@@ -212,7 +221,8 @@ static bool replaceCoroEndAsync(AnyCoroEndInst *End) {
 /// Replace a non-unwind call to llvm.coro.end.
 static void replaceFallthroughCoroEnd(AnyCoroEndInst *End,
                                       const coro::Shape &Shape, Value *FramePtr,
-                                      bool InRamp, CallGraph *CG) {
+                                      bool InRamp, CallGraph *CG,
+                                      Value *DestroyFn) {
   // Start inserting right before the coro.end.
   IRBuilder<> Builder(End);
 
@@ -226,6 +236,11 @@ static void replaceFallthroughCoroEnd(AnyCoroEndInst *End,
     // in this lowering, because we need to deallocate the coroutine.
     if (InRamp)
       return;
+    if (DestroyFn) {
+      auto *Call = Builder.CreateCall(Shape.getResumeFunctionType(), DestroyFn,
+                                      FramePtr);
+      Call->setTailCallKind(CallInst::TCK_Tail);
+    }
     Builder.CreateRetVoid();
     break;
 
@@ -384,11 +399,12 @@ static void replaceUnwindCoroEnd(AnyCoroEndInst *End, const coro::Shape &Shape,
 }
 
 static void replaceCoroEnd(AnyCoroEndInst *End, const coro::Shape &Shape,
-                           Value *FramePtr, bool InRamp, CallGraph *CG) {
+                           Value *FramePtr, bool InRamp, CallGraph *CG,
+                           Value *DestroyFn = nullptr) {
   if (End->isUnwind())
     replaceUnwindCoroEnd(End, Shape, FramePtr, InRamp, CG);
   else
-    replaceFallthroughCoroEnd(End, Shape, FramePtr, InRamp, CG);
+    replaceFallthroughCoroEnd(End, Shape, FramePtr, InRamp, CG, DestroyFn);
   End->eraseFromParent();
 }
 
@@ -549,11 +565,27 @@ void coro::BaseCloner::replaceCoroSuspends() {
 }
 
 void coro::BaseCloner::replaceCoroEnds() {
+  Value *DestroyFn = nullptr;
+  if (FKind == CloneKind::SwitchResume &&
+      Shape.SwitchLowering.HasCoroElideNoAllocVariant) {
+    // A resumed coroutine can invoke user code that destroys the allocation
+    // containing an elided callee frame. Cache the function pointer before
+    // entering the resume body so the fallthrough coro.end does not read a
+    // freed frame.
+    IRBuilder<> EntryBuilder(&NewF->getEntryBlock(),
+                             NewF->getEntryBlock().getFirstInsertionPt());
+    Value *DestroyAddr =
+        createSwitchDestroyPtr(Shape, EntryBuilder, NewFramePtr);
+    DestroyFn = EntryBuilder.CreateLoad(Shape.getSwitchResumePointerType(),
+                                        DestroyAddr, "destroy");
+  }
+
   for (AnyCoroEndInst *CE : Shape.CoroEnds) {
     // We use a null call graph because there's no call graph node for
     // the cloned function yet.  We'll just be rebuilding that later.
     auto *NewCE = cast<AnyCoroEndInst>(VMap[CE]);
-    replaceCoroEnd(NewCE, Shape, NewFramePtr, /*in ramp*/ false, nullptr);
+    replaceCoroEnd(NewCE, Shape, NewFramePtr, /*in ramp*/ false, nullptr,
+                   DestroyFn);
   }
 }
 
@@ -1099,8 +1131,13 @@ void coro::SwitchCloner::create() {
   // Clone the function
   coro::BaseCloner::create();
 
-  // Replacing coro.free with 'null' in cleanup to suppress deallocation code.
-  if (FKind == coro::CloneKind::SwitchCleanup)
+  // Replacing coro.free with 'null' in cleanup suppresses deallocation code.
+  // Resume functions that fall through to coro.end delegate self-destruction
+  // through the frame destroy slot, which selects the cleanup clone for
+  // allocation-elided frames.
+  if (FKind == coro::CloneKind::SwitchCleanup ||
+      (FKind == coro::CloneKind::SwitchResume &&
+       Shape.SwitchLowering.HasCoroElideNoAllocVariant))
     elideCoroFree(NewFramePtr);
 }
 
@@ -2014,6 +2051,9 @@ static void doSplitCoroutine(Function &F, SmallVectorImpl<Function *> &Clones,
   bool shouldCreateNoAllocVariant =
       !isNoSuspendCoroutine && Shape.ABI == coro::ABI::Switch &&
       hasSafeElideCaller(F) && !F.hasFnAttribute(llvm::Attribute::NoInline);
+  if (Shape.ABI == coro::ABI::Switch)
+    Shape.SwitchLowering.HasCoroElideNoAllocVariant =
+        shouldCreateNoAllocVariant;
 
   // If there are no suspend points, no split required, just remove
   // the allocation and deallocation blocks, they are not needed.

@@ -52,11 +52,14 @@ entry:
 ; CHECK: ret ptr %hdl
 
 ; CHECK-LABEL: @f.resume({{.*}}) addrspace(200) {
+; CHECK: %[[DESTROY_ADDR:.+]] = getelementptr inbounds i8, ptr %hdl, i64 8
+; CHECK-NEXT: %[[DESTROY:.+]] = load ptr, ptr %[[DESTROY_ADDR]]
 ; CHECK-NOT: call ptr @malloc
 ; CHECK-NOT: call void @print(i32 0)
 ; CHECK: call void @print(i32 1)
 ; CHECK-NOT: call void @print(i32 0)
-; CHECK: call void @free(
+; CHECK-NOT: call void @free(
+; CHECK: tail call void %[[DESTROY]](ptr %hdl)
 ; CHECK: ret void
 
 ; CHECK-LABEL: @f.destroy({{.*}}) addrspace(200) {
