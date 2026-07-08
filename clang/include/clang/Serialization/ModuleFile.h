@@ -378,6 +378,22 @@ public:
   /// parallel to SLocEntryOffsets when present.
   const SerializedSLocEntryDedupInfo *SLocEntryDedupInfos = nullptr;
 
+  /// The number of source location entries actually allocated in SourceManager.
+  unsigned NumSLocEntriesAllocated = 0;
+
+  /// For each allocated loaded SLocEntry slot, the serialized local SLoc index
+  /// in this module. Empty when there is a one-to-one mapping.
+  std::vector<unsigned> SLocEntryLoadedLocalIndices;
+
+  /// Maps serialized local SLoc indices to loaded FileID values. Empty when
+  /// there is a one-to-one mapping.
+  std::vector<int> SLocEntryIDRemap;
+
+  /// Maps serialized local source-location offsets to global offsets. Empty
+  /// when the whole module uses the normal single base-offset translation.
+  ContinuousRangeMap<SourceLocation::UIntTy, SourceLocation::IntTy, 4>
+      SLocOffsetRemap;
+
   // === Identifiers ===
 
   /// The number of identifiers in this AST file.

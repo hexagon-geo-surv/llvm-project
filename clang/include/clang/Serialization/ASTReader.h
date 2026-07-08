@@ -551,6 +551,41 @@ private:
   /// SourceLocation offsets to the modules containing them.
   GlobalSLocOffsetMapType GlobalSLocOffsetMap;
 
+  struct SLocDedupKey {
+    uint64_t HashLo;
+    uint64_t HashHi;
+    uint32_t Length;
+    uint32_t Flags;
+
+    bool operator==(const SLocDedupKey &Other) const {
+      return HashLo == Other.HashLo && HashHi == Other.HashHi &&
+             Length == Other.Length && Flags == Other.Flags;
+    }
+  };
+
+  struct SLocDedupKeyInfo {
+    static SLocDedupKey getEmptyKey() {
+      return {~uint64_t(0), ~uint64_t(0), ~uint32_t(0), ~uint32_t(0)};
+    }
+    static SLocDedupKey getTombstoneKey() {
+      return {~uint64_t(1), ~uint64_t(1), ~uint32_t(1), ~uint32_t(1)};
+    }
+    static unsigned getHashValue(const SLocDedupKey &Key) {
+      return llvm::DenseMapInfo<uint64_t>::getHashValue(Key.HashLo);
+    }
+    static bool isEqual(const SLocDedupKey &LHS, const SLocDedupKey &RHS) {
+      return LHS == RHS;
+    }
+  };
+
+  struct DedupedSLocRange {
+    int FileID;
+    SourceLocation::UIntTy Offset;
+  };
+
+  llvm::DenseMap<SLocDedupKey, DedupedSLocRange, SLocDedupKeyInfo>
+      DedupedSLocRanges;
+
   /// Types that have already been loaded from the chain.
   ///
   /// When the pointer at index I is non-NULL, the type with
@@ -2394,6 +2429,11 @@ public:
   bool ReadSLocEntry(int ID) override;
   /// Get the index ID for the loaded SourceLocation offset.
   int getSLocEntryID(SourceLocation::UIntTy SLocOffset) override;
+  /// Translate a loaded FileID into a serialized local SLoc index.
+  unsigned getSLocEntryLocalIndex(ModuleFile &F, int ID) const;
+  /// Translate a serialized SLocEntry offset into the global source view.
+  SourceLocation::UIntTy
+  translateSLocOffset(ModuleFile &F, SourceLocation::UIntTy Offset) const;
   /// Try to read the offset of the SLocEntry at the given index in the given
   /// module file.
   llvm::Expected<SourceLocation::UIntTy> readSLocOffset(ModuleFile *F,
@@ -2493,6 +2533,13 @@ public:
     // translated or refactor the code to make it clear that
     // TranslateSourceLocation won't be called with translated source location.
 
+    if (ModuleFile.SLocOffsetRemap.begin() != ModuleFile.SLocOffsetRemap.end()) {
+      auto I = ModuleFile.SLocOffsetRemap.find(Loc.getOffset());
+      assert(I != ModuleFile.SLocOffsetRemap.end() &&
+             "Cannot find offset to remap.");
+      return Loc.getLocWithOffset(I->second);
+    }
+
     return Loc.getLocWithOffset(ModuleFile.SLocEntryBaseOffset - 2);
   }
 
@@ -2514,6 +2561,11 @@ public:
     assert(FID.ID >= 0 && "Reading non-local FileID.");
     if (FID.isInvalid())
       return FID;
+    if (!F.SLocEntryIDRemap.empty()) {
+      assert(static_cast<unsigned>(FID.ID - 1) < F.SLocEntryIDRemap.size() &&
+             "Reading out-of-range FileID.");
+      return FileID::get(F.SLocEntryIDRemap[FID.ID - 1]);
+    }
     return FileID::get(F.SLocEntryBaseID + FID.ID - 1);
   }
 

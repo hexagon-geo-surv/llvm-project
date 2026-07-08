@@ -231,6 +231,11 @@ public:
   LLVM_PREFERRED_TYPE(bool)
   unsigned ForceCheckCXX20ModulesInputFiles : 1;
 
+  // Whether loaded module source locations may reuse address space for files
+  // with identical serialized content metadata.
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned DeduplicateModuleSourceLocations : 1;
+
   /// Whether the module includes debug information (-gmodules).
   LLVM_PREFERRED_TYPE(bool)
   unsigned UseDebugInfo : 1;
@@ -298,7 +303,8 @@ public:
         ModulesValidateSystemHeaders(false),
         ModulesForceValidateUserHeaders(true),
         ValidateASTInputFilesContent(false),
-        ForceCheckCXX20ModulesInputFiles(false), UseDebugInfo(false),
+        ForceCheckCXX20ModulesInputFiles(false),
+        DeduplicateModuleSourceLocations(false), UseDebugInfo(false),
         ModulesValidateDiagnosticOptions(true),
         ModulesSkipDiagnosticOptions(false),
         ModulesSkipHeaderSearchPaths(false),

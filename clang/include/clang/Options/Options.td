@@ -3735,6 +3735,11 @@ def fforce_check_cxx20_modules_input_files:
   Group<f_Group>, Visibility<[ClangOption, CC1Option]>,
   HelpText<"Check the input source files from C++20 modules explicitly">,
   MarshallingInfoFlag<HeaderSearchOpts<"ForceCheckCXX20ModulesInputFiles">>;
+def fdeduplicate_module_source_locations:
+  Flag <["-"], "fdeduplicate-module-source-locations">,
+  Group<f_Group>, Visibility<[CC1Option]>,
+  HelpText<"Deduplicate loaded module source-location address space for identical file contents">,
+  MarshallingInfoFlag<HeaderSearchOpts<"DeduplicateModuleSourceLocations">>;
 def fmodules_validate_input_files_content:
   Flag <["-"], "fmodules-validate-input-files-content">,
   Group<f_Group>,

@@ -1844,8 +1844,30 @@ ASTReader::readSLocOffset(ModuleFile *F, unsigned Index) {
   case SM_SLOC_FILE_ENTRY:
   case SM_SLOC_BUFFER_ENTRY:
   case SM_SLOC_EXPANSION_ENTRY:
-    return F->SLocEntryBaseOffset + Record[0];
+    return translateSLocOffset(*F, Record[0]);
   }
+}
+
+unsigned ASTReader::getSLocEntryLocalIndex(ModuleFile &F, int ID) const {
+  if (!F.SLocEntryLoadedLocalIndices.empty()) {
+    unsigned LoadedIndex = ID - F.SLocEntryBaseID;
+    assert(LoadedIndex < F.SLocEntryLoadedLocalIndices.size() &&
+           "loaded SLoc index out of range");
+    return F.SLocEntryLoadedLocalIndices[LoadedIndex];
+  }
+  return ID - F.SLocEntryBaseID;
+}
+
+SourceLocation::UIntTy
+ASTReader::translateSLocOffset(ModuleFile &F,
+                               SourceLocation::UIntTy Offset) const {
+  if (F.SLocOffsetRemap.begin() != F.SLocOffsetRemap.end()) {
+    SourceLocation Loc = SourceLocation::getFileLoc(Offset + 2);
+    auto I = F.SLocOffsetRemap.find(Loc.getOffset());
+    assert(I != F.SLocOffsetRemap.end() && "Cannot find offset to remap.");
+    return Loc.getLocWithOffset(I->second).getOffset();
+  }
+  return F.SLocEntryBaseOffset + Offset;
 }
 
 int ASTReader::getSLocEntryID(SourceLocation::UIntTy SLocOffset) {
@@ -1858,9 +1880,10 @@ int ASTReader::getSLocEntryID(SourceLocation::UIntTy SLocOffset) {
   bool Invalid = false;
 
   auto It = llvm::upper_bound(
-      llvm::index_range(0, F->LocalNumSLocEntries), SLocOffset,
-      [&](SourceLocation::UIntTy Offset, std::size_t LocalIndex) {
-        int ID = F->SLocEntryBaseID + LocalIndex;
+      llvm::index_range(0, F->NumSLocEntriesAllocated), SLocOffset,
+      [&](SourceLocation::UIntTy Offset, std::size_t LoadedIndex) {
+        int ID = F->SLocEntryBaseID + LoadedIndex;
+        unsigned LocalIndex = getSLocEntryLocalIndex(*F, ID);
         std::size_t Index = -ID - 2;
         if (!SourceMgr.SLocEntryOffsetLoaded[Index]) {
           assert(!SourceMgr.SLocEntryLoaded[Index]);
@@ -1945,15 +1968,15 @@ bool ASTReader::ReadSLocEntry(int ID) {
   };
 
   ModuleFile *F = GlobalSLocEntryMap.find(-ID)->second;
+  unsigned LocalIndex = getSLocEntryLocalIndex(*F, ID);
   if (llvm::Error Err = F->SLocEntryCursor.JumpToBit(
           F->SLocEntryOffsetsBase +
-          F->SLocEntryOffsets[ID - F->SLocEntryBaseID])) {
+          F->SLocEntryOffsets[LocalIndex])) {
     Error(std::move(Err));
     return true;
   }
 
   BitstreamCursor &SLocEntryCursor = F->SLocEntryCursor;
-  SourceLocation::UIntTy BaseOffset = F->SLocEntryBaseOffset;
 
   ++NumSLocEntriesRead;
   Expected<llvm::BitstreamEntry> MaybeEntry = SLocEntryCursor.advance();
@@ -2003,7 +2026,7 @@ bool ASTReader::ReadSLocEntry(int ID) {
     SrcMgr::CharacteristicKind
       FileCharacter = (SrcMgr::CharacteristicKind)Record[2];
     FileID FID = SourceMgr.createFileID(*File, IncludeLoc, FileCharacter, ID,
-                                        BaseOffset + Record[0]);
+                                        translateSLocOffset(*F, Record[0]));
     SrcMgr::FileInfo &FileInfo = SourceMgr.getSLocEntry(FID).getFile();
     FileInfo.NumCreatedFIDs = Record[5];
     if (Record[3])
@@ -2045,7 +2068,8 @@ bool ASTReader::ReadSLocEntry(int ID) {
     if (!Buffer)
       return true;
     FileID FID = SourceMgr.createFileID(std::move(Buffer), FileCharacter, ID,
-                                        BaseOffset + Offset, IncludeLoc);
+                                        translateSLocOffset(*F, Offset),
+                                        IncludeLoc);
     if (Record[3]) {
       auto &FileInfo = SourceMgr.getSLocEntry(FID).getFile();
       FileInfo.setHasLineDirectives();
@@ -2059,7 +2083,7 @@ bool ASTReader::ReadSLocEntry(int ID) {
     SourceLocation ExpansionEnd = ReadSourceLocation(*F, Record[3]);
     SourceMgr.createExpansionLoc(SpellingLoc, ExpansionBegin, ExpansionEnd,
                                  Record[5], Record[4], ID,
-                                 BaseOffset + Record[0]);
+                                 translateSLocOffset(*F, Record[0]));
     break;
   }
   }
@@ -4240,30 +4264,106 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
       F.LocalNumSLocEntries = Record[0];
       SourceLocation::UIntTy SLocSpaceSize = Record[1];
       F.SLocEntryOffsetsBase = Record[2] + F.SourceManagerBlockStartOffset;
+
+      const HeaderSearchOptions &HSOpts =
+          PP.getHeaderSearchInfo().getHeaderSearchOpts();
+      bool UseSLocDedup =
+          HSOpts.DeduplicateModuleSourceLocations && F.SLocEntryDedupInfos;
+
+      SourceLocation::UIntTy AllocatedSLocSpaceSize = SLocSpaceSize;
+      if (UseSLocDedup) {
+        F.SLocEntryIDRemap.assign(F.LocalNumSLocEntries, 0);
+        F.SLocEntryLoadedLocalIndices.clear();
+        F.SLocEntryLoadedLocalIndices.reserve(F.LocalNumSLocEntries);
+
+        for (unsigned I = 0; I != F.LocalNumSLocEntries; ++I) {
+          const auto &Info = F.SLocEntryDedupInfos[I];
+          uint32_t Flags = Info.Flags;
+          bool Dedupable = I != 0 && (Flags & SLEDIF_Dedupable);
+          SLocDedupKey Key{Info.HashLo, Info.HashHi, Info.Length,
+                           Flags & (SLEDIF_HasLineDirectives |
+                                    SLEDIF_CharacteristicMask)};
+          if (Dedupable &&
+              DedupedSLocRanges.find(Key) != DedupedSLocRanges.end())
+            continue;
+          F.SLocEntryLoadedLocalIndices.push_back(I);
+        }
+
+        AllocatedSLocSpaceSize = 0;
+        for (unsigned LocalIndex : F.SLocEntryLoadedLocalIndices)
+          AllocatedSLocSpaceSize += F.SLocEntryDedupInfos[LocalIndex].Length;
+      }
+
+      F.NumSLocEntriesAllocated =
+          UseSLocDedup ? F.SLocEntryLoadedLocalIndices.size()
+                       : F.LocalNumSLocEntries;
+
       std::tie(F.SLocEntryBaseID, F.SLocEntryBaseOffset) =
-          SourceMgr.AllocateLoadedSLocEntries(F.LocalNumSLocEntries,
-                                              SLocSpaceSize);
+          SourceMgr.AllocateLoadedSLocEntries(F.NumSLocEntriesAllocated,
+                                              AllocatedSLocSpaceSize);
       if (!F.SLocEntryBaseID) {
         Diags.Report(SourceLocation(), diag::remark_sloc_usage);
         SourceMgr.noteSLocAddressSpaceUsage(Diags);
         return llvm::createStringError(std::errc::invalid_argument,
                                        "ran out of source locations");
       }
+
+      if (UseSLocDedup) {
+        using RemapTy =
+            ContinuousRangeMap<SourceLocation::UIntTy, SourceLocation::IntTy,
+                               4>;
+        RemapTy::Builder OffsetRemap(F.SLocOffsetRemap);
+        SourceLocation::UIntTy NextAllocatedOffset = F.SLocEntryBaseOffset;
+        unsigned LoadedIndex = 0;
+
+        for (unsigned I = 0; I != F.LocalNumSLocEntries; ++I) {
+          const auto &Info = F.SLocEntryDedupInfos[I];
+          SourceLocation::UIntTy LocalStart =
+              SourceLocation::UIntTy(Info.LocalOffset) + 2;
+          uint32_t Flags = Info.Flags;
+          bool Dedupable = I != 0 && (Flags & SLEDIF_Dedupable);
+          SLocDedupKey Key{Info.HashLo, Info.HashHi, Info.Length,
+                           Flags & (SLEDIF_HasLineDirectives |
+                                    SLEDIF_CharacteristicMask)};
+
+          auto Existing = Dedupable ? DedupedSLocRanges.find(Key)
+                                    : DedupedSLocRanges.end();
+          if (Existing != DedupedSLocRanges.end()) {
+            F.SLocEntryIDRemap[I] = Existing->second.FileID;
+            OffsetRemap.insert(std::make_pair(
+                LocalStart, SourceLocation::IntTy(Existing->second.Offset -
+                                                  LocalStart)));
+            continue;
+          }
+
+          int ID = F.SLocEntryBaseID + LoadedIndex++;
+          F.SLocEntryIDRemap[I] = ID;
+          OffsetRemap.insert(std::make_pair(
+              LocalStart,
+              SourceLocation::IntTy(NextAllocatedOffset - LocalStart)));
+          if (Dedupable)
+            DedupedSLocRanges.insert(
+                std::make_pair(Key, DedupedSLocRange{ID, NextAllocatedOffset}));
+          NextAllocatedOffset += Info.Length;
+        }
+      }
+
       // Make our entry in the range map. BaseID is negative and growing, so
       // we invert it. Because we invert it, though, we need the other end of
       // the range.
       unsigned RangeStart =
-          unsigned(-F.SLocEntryBaseID) - F.LocalNumSLocEntries + 1;
+          unsigned(-F.SLocEntryBaseID) - F.NumSLocEntriesAllocated + 1;
       GlobalSLocEntryMap.insert(std::make_pair(RangeStart, &F));
-      F.FirstLoc = SourceLocation::getFromRawEncoding(F.SLocEntryBaseOffset);
+      F.FirstLoc = TranslateSourceLocation(F, SourceLocation::getFileLoc(2));
 
       // SLocEntryBaseOffset is lower than MaxLoadedOffset and decreasing.
       assert((F.SLocEntryBaseOffset & SourceLocation::MacroIDBit) == 0);
       GlobalSLocOffsetMap.insert(
           std::make_pair(SourceManager::MaxLoadedOffset - F.SLocEntryBaseOffset
-                           - SLocSpaceSize,&F));
+                           - AllocatedSLocSpaceSize,
+                         &F));
 
-      TotalNumSLocEntries += F.LocalNumSLocEntries;
+      TotalNumSLocEntries += F.NumSLocEntriesAllocated;
       break;
     }
 
