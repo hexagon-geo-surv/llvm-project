@@ -105,6 +105,7 @@
 #include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/VersionTuple.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/xxhash.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -920,6 +921,7 @@ void ASTWriter::WriteBlockInfoBlock() {
   RECORD(METHOD_POOL);
   RECORD(PP_COUNTER_VALUE);
   RECORD(SOURCE_LOCATION_OFFSETS);
+  RECORD(SLOC_ENTRY_DEDUP_INFO);
   RECORD(EXT_VECTOR_DECLS);
   RECORD(UNUSED_FILESCOPED_DECLS);
   RECORD(PPD_ENTITIES_OFFSETS);
@@ -2060,6 +2062,30 @@ static unsigned CreateSLocExpansionAbbrev(llvm::BitstreamWriter &Stream) {
   return Stream.EmitAbbrev(std::move(Abbrev));
 }
 
+static SerializedSLocEntryDedupInfo
+makeSLocEntryDedupInfo(SourceLocation::UIntTy LocalOffset) {
+  SerializedSLocEntryDedupInfo Info = {};
+  Info.LocalOffset = LocalOffset;
+  return Info;
+}
+
+static std::pair<uint64_t, uint64_t>
+computeSLocEntryContentHash(SourceManager &SourceMgr,
+                            const SrcMgr::ContentCache &Content) {
+  std::optional<llvm::MemoryBufferRef> Buffer =
+      Content.getBufferOrNone(SourceMgr.getDiagnostics(),
+                              SourceMgr.getFileManager());
+  if (!Buffer)
+    return {0, 0};
+
+  llvm::XXH128_hash_t Hash = llvm::xxh3_128bits(
+      reinterpret_cast<const uint8_t *>(Buffer->getBufferStart()),
+      Buffer->getBufferSize());
+  if (!Hash.low64 && !Hash.high64)
+    return {0, 0};
+  return {Hash.low64, Hash.high64};
+}
+
 /// Emit key length and data length as ULEB-encoded data, and return them as a
 /// pair.
 static std::pair<unsigned, unsigned>
@@ -2359,8 +2385,10 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr) {
   // Write out the source location entry table. We skip the first
   // entry, which is always the same dummy entry.
   std::vector<uint32_t> SLocEntryOffsets;
+  std::vector<SerializedSLocEntryDedupInfo> SLocEntryDedupInfos;
   uint64_t SLocEntryOffsetsBase = Stream.GetCurrentBitNo();
   SLocEntryOffsets.reserve(SourceMgr.local_sloc_entry_size() - 1);
+  SLocEntryDedupInfos.reserve(SourceMgr.local_sloc_entry_size() - 1);
   for (unsigned I = 1, N = SourceMgr.local_sloc_entry_size();
        I != N; ++I) {
     // Get this source location entry.
@@ -2393,7 +2421,10 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr) {
         continue;
       SLocEntryOffsets.push_back(Offset);
       // Starting offset of this entry within this module, so skip the dummy.
-      Record.push_back(getAdjustedOffset(SLoc->getOffset()) - 2);
+      SourceLocation::UIntTy LocalOffset =
+          getAdjustedOffset(SLoc->getOffset()) - 2;
+      Record.push_back(LocalOffset);
+      SLocEntryDedupInfos.push_back(makeSLocEntryDedupInfo(LocalOffset));
       AddSourceLocation(getAffectingIncludeLoc(SourceMgr, File), Record);
       Record.push_back(File.getFileCharacteristic()); // FIXME: stable encoding
       Record.push_back(File.hasLineDirectives());
@@ -2406,6 +2437,27 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr) {
         // The source location entry is a file. Emit input file ID.
         assert(InputFileIDs[*Content->OrigEntry] != 0 && "Missed file entry");
         Record.push_back(InputFileIDs[*Content->OrigEntry]);
+
+        SerializedSLocEntryDedupInfo &Info = SLocEntryDedupInfos.back();
+        uint32_t Flags =
+            SLEDIF_File |
+            (static_cast<uint32_t>(File.getFileCharacteristic())
+             << SLEDIF_CharacteristicShift);
+        if (File.hasLineDirectives())
+          Flags |= SLEDIF_HasLineDirectives;
+
+        if (!Content->BufferOverridden && !Content->IsTransient) {
+          auto [HashLo, HashHi] =
+              computeSLocEntryContentHash(SourceMgr, *Content);
+          if (HashLo || HashHi) {
+            Info.HashLo = HashLo;
+            Info.HashHi = HashHi;
+            Flags |= SLEDIF_Dedupable;
+          }
+        }
+
+        Info.Flags = Flags;
+        Info.InputFileID = InputFileIDs[*Content->OrigEntry];
 
         Record.push_back(getAdjustedNumCreatedFIDs(FID));
 
@@ -2453,7 +2505,10 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr) {
       const SrcMgr::ExpansionInfo &Expansion = SLoc->getExpansion();
       SLocEntryOffsets.push_back(Offset);
       // Starting offset of this entry within this module, so skip the dummy.
-      Record.push_back(getAdjustedOffset(SLoc->getOffset()) - 2);
+      SourceLocation::UIntTy LocalOffset =
+          getAdjustedOffset(SLoc->getOffset()) - 2;
+      Record.push_back(LocalOffset);
+      SLocEntryDedupInfos.push_back(makeSLocEntryDedupInfo(LocalOffset));
       AddSourceLocation(Expansion.getSpellingLoc(), Record);
       AddSourceLocation(Expansion.getExpansionLocStart(), Record);
       AddSourceLocation(Expansion.isMacroArgExpansion()
@@ -2476,9 +2531,37 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr) {
   if (SLocEntryOffsets.empty())
     return;
 
+  using namespace llvm;
+
+  SourceLocation::UIntTy SLocSpaceSize =
+      getAdjustedOffset(SourceMgr.getNextLocalOffset()) - 1 /* skip dummy */;
+
+  assert(SLocEntryDedupInfos.size() == SLocEntryOffsets.size() &&
+         "dedup info should be parallel to SLocEntryOffsets");
+  for (unsigned I = 0, N = SLocEntryDedupInfos.size(); I != N; ++I) {
+    SourceLocation::UIntTy NextOffset =
+        I + 1 == N ? SLocSpaceSize
+                   : SourceLocation::UIntTy(SLocEntryDedupInfos[I + 1]
+                                                .LocalOffset);
+    SLocEntryDedupInfos[I].Length =
+        NextOffset - SourceLocation::UIntTy(SLocEntryDedupInfos[I].LocalOffset);
+  }
+
+  {
+    auto Abbrev = std::make_shared<BitCodeAbbrev>();
+    Abbrev->Add(BitCodeAbbrevOp(SLOC_ENTRY_DEDUP_INFO));
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 16)); // # of slocs
+    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));    // dedup info
+    unsigned SLocDedupInfoAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
+
+    RecordData::value_type Record[] = {SLOC_ENTRY_DEDUP_INFO,
+                                       SLocEntryDedupInfos.size()};
+    Stream.EmitRecordWithBlob(SLocDedupInfoAbbrev, Record,
+                              bytes(SLocEntryDedupInfos));
+  }
+
   // Write the source-location offsets table into the AST block. This
   // table is used for lazily loading source-location information.
-  using namespace llvm;
 
   auto Abbrev = std::make_shared<BitCodeAbbrev>();
   Abbrev->Add(BitCodeAbbrevOp(SOURCE_LOCATION_OFFSETS));
@@ -2489,8 +2572,7 @@ void ASTWriter::WriteSourceManagerBlock(SourceManager &SourceMgr) {
   unsigned SLocOffsetsAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
   {
     RecordData::value_type Record[] = {
-        SOURCE_LOCATION_OFFSETS, SLocEntryOffsets.size(),
-        getAdjustedOffset(SourceMgr.getNextLocalOffset()) - 1 /* skip dummy */,
+        SOURCE_LOCATION_OFFSETS, SLocEntryOffsets.size(), SLocSpaceSize,
         SLocEntryOffsetsBase - SourceManagerBlockOffset};
     Stream.EmitRecordWithBlob(SLocOffsetsAbbrev, Record,
                               bytes(SLocEntryOffsets));

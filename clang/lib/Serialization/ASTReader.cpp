@@ -3820,6 +3820,7 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
       case PP_ASSUME_NONNULL_LOC:
       case PP_CONDITIONAL_STACK:
       case PP_COUNTER_VALUE:
+      case SLOC_ENTRY_DEDUP_INFO:
       case SOURCE_LOCATION_OFFSETS:
       case MODULE_OFFSET_MAP:
       case SOURCE_MANAGER_LINE_TABLE:
@@ -4219,6 +4220,19 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
     case FILE_SORTED_DECLS:
       F.FileSortedDecls = (const unaligned_decl_id_t *)Blob.data();
       F.NumFileSortedDecls = Record[0];
+      break;
+
+    case SLOC_ENTRY_DEDUP_INFO:
+      if (Record.size() != 1)
+        return llvm::createStringError(std::errc::illegal_byte_sequence,
+                                       "invalid SLoc entry dedup info record");
+      if (Blob.size() !=
+          Record[0] * sizeof(serialization::SerializedSLocEntryDedupInfo))
+        return llvm::createStringError(std::errc::illegal_byte_sequence,
+                                       "invalid SLoc entry dedup info blob");
+      F.SLocEntryDedupInfos =
+          reinterpret_cast<const serialization::SerializedSLocEntryDedupInfo *>(
+              Blob.data());
       break;
 
     case SOURCE_LOCATION_OFFSETS: {

@@ -79,6 +79,34 @@ struct InputFileInfo {
   }
 };
 
+enum SLocEntryDedupInfoFlags : uint32_t {
+  SLEDIF_File = 1u << 0,
+  SLEDIF_Dedupable = 1u << 1,
+  SLEDIF_HasLineDirectives = 1u << 2,
+  SLEDIF_CharacteristicShift = 3,
+  SLEDIF_CharacteristicMask = 7u << SLEDIF_CharacteristicShift,
+};
+
+/// Eagerly-readable metadata parallel to ModuleFile::SLocEntryOffsets.
+struct SerializedSLocEntryDedupInfo {
+  /// The serialized source-location offset for this entry.
+  llvm::support::ulittle32_t LocalOffset;
+
+  /// The source-location address-space span consumed by this entry, including
+  /// the one-past-the-end sentinel byte.
+  llvm::support::ulittle32_t Length;
+
+  /// xxh3_128bits over the file contents. All-zero means non-dedupable.
+  llvm::support::ulittle64_t HashLo;
+  llvm::support::ulittle64_t HashHi;
+
+  /// SLocEntryDedupInfoFlags plus the file characteristic in bits [3, 5].
+  llvm::support::ulittle32_t Flags;
+
+  /// The input-file ID used by the corresponding SM_SLOC_FILE_ENTRY, or 0.
+  llvm::support::ulittle32_t InputFileID;
+};
+
 /// The input file that has been loaded from this AST file, along with
 /// bools indicating whether this was an overridden buffer or if it was
 /// out-of-date or not-found.
@@ -345,6 +373,10 @@ public:
   /// Offsets for all of the source location entries in the
   /// AST file.
   const uint32_t *SLocEntryOffsets = nullptr;
+
+  /// Eager metadata for source-location address-space deduplication. This is
+  /// parallel to SLocEntryOffsets when present.
+  const SerializedSLocEntryDedupInfo *SLocEntryDedupInfos = nullptr;
 
   // === Identifiers ===
 
