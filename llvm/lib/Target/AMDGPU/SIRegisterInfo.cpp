@@ -3245,19 +3245,23 @@ bool SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
           Register TmpVGPR = RS->scavengeRegisterBackwards(
               AMDGPU::VGPR_32RegClass, MI, false, 0, /*AllowSpill=*/true);
 
-          // Materialize the frame register.
-          auto MIB =
-              BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_MOV_B32_e32), TmpVGPR);
-          if (FrameReg)
-            MIB.addReg(FrameReg);
-          else
-            MIB.addImm(Offset);
-
-          // Add the offset to the frame register.
-          if (FrameReg && Offset)
-            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_ADD_U32_e32), FrameReg)
-                .addReg(FrameReg, RegState::Kill)
+          // Materialize the scratch address (FrameReg + Offset) into the
+          // scavenged VGPR for use as the SV form vaddr. FrameReg, when it is
+          // available, is an SGPR; when there is no frame register the address
+          // is simply the frame offset.
+          if (FrameReg) {
+            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_MOV_B32_e32), TmpVGPR)
+                .addReg(FrameReg);
+            if (Offset)
+              // Offset is a literal and TmpVGPR is a VGPR, so only a single
+              // constant bus operand is used and this e32 form is legal.
+              BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_ADD_U32_e32), TmpVGPR)
+                  .addImm(Offset)
+                  .addReg(TmpVGPR, RegState::Kill);
+          } else {
+            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_MOV_B32_e32), TmpVGPR)
                 .addImm(Offset);
+          }
 
           BuildMI(*MBB, MI, DL, TII->get(SVOpcode))
               .add(MI->getOperand(0)) // $vdata
