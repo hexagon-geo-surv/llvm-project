@@ -223,6 +223,20 @@ private:
   std::string features_;
 };
 
+/// True if a metadirective/declare-variant guarded by \p selector may
+/// be selected for the current target, requiring its loop nest to be checked.
+///
+/// False only if the variant is provably unselectable:
+///   1. required trait that can never match (e.g. a compile-time-false
+///      condition or invalid property).
+///   2. device/implementation selector incompatible with a known target.
+///
+/// A null \p selector, or one using an unsupported feature (see
+/// \c FindUnsupportedSelectorFeature), is treated as possibly selectable.
+bool MayVariantBeSelected(
+    const parser::traits::OmpContextSelectorSpecification *selector,
+    SemanticsContext &context, OmpVariantMatchContext &matchContext);
+
 std::vector<SomeExpr> GetTopLevelDesignators(const SomeExpr &expr);
 const SomeExpr *HasStorageOverlap(
     const SomeExpr &base, llvm::ArrayRef<SomeExpr> exprs);

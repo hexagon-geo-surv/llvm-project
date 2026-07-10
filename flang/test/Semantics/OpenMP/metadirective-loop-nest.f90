@@ -152,3 +152,11 @@ end subroutine
 subroutine no_loop_dead_variant()
   !$omp metadirective when(device={kind(nohost)}: do) default(nothing)
 end subroutine
+
+! A loop-associated variant in a declarative context (e.g. a module
+! specification part) also has no loop nest to associate with.
+module no_loop_in_module
+  implicit none
+  !ERROR: This construct should contain a DO-loop or a loop-nest-generating construct
+  !$omp metadirective when(implementation={vendor(llvm)}: do) default(nothing)
+end module

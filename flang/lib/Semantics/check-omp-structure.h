@@ -60,6 +60,7 @@ public:
   OmpStructureChecker(SemanticsContext &context);
 
   void Enter(const parser::ProgramUnit &);
+  void Leave(const parser::ProgramUnit &);
   void Enter(const parser::MainProgram &);
   void Leave(const parser::MainProgram &);
   void Enter(const parser::BlockData &);

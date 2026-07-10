@@ -44,7 +44,10 @@ void OmpStructureChecker::Enter(const parser::OmpClause::When &x) {
   OmpVerifyModifiers(
       x.v, llvm::omp::OMPC_when, GetContext().clauseSource, context_);
   // Record this WHEN clause's context selector so the variant directive it
-  // controls can be paired with it for static-applicability matching.
+  // controls can be paired with it for static-applicability matching. A
+  // well-formed WHEN clause has exactly one modifier, its context selector;
+  // pair it only in that case, which also makes front() safe. Any other count
+  // is malformed and already diagnosed by OmpVerifyModifiers above.
   if (const auto &modifiers{std::get<0>(x.v.t)};
       modifiers && modifiers->size() == 1) {
     currentWhenSelector_ =
@@ -609,41 +612,6 @@ void OmpStructureChecker::Leave(const parser::OmpMetadirectiveDirective &) {
   ExitDirectiveNest(MetadirectiveNest);
 }
 
-// Return true if the variant guarded by `selector` might be selected, so its
-// associated loop must still be checked. Skip it only when it is provably
-// unselectable.
-static bool mayVariantBeSelected(
-    const parser::traits::OmpContextSelectorSpecification *selector,
-    SemanticsContext &context, OmpVariantMatchContext &matchContext) {
-  if (!selector ||
-      FindUnsupportedSelectorFeature(*selector, context) !=
-          UnsupportedSelectorFeature::None) {
-    return true;
-  }
-  llvm::omp::VariantMatchInfo vmi;
-  (void)MakeVariantMatchInfo(vmi, *selector, context);
-  const auto &required{vmi.RequiredTraits};
-  using TP = llvm::omp::TraitProperty;
-  // In the default "match all" mode, a required trait that can never match
-  // (e.g. a compile-time-false condition or an invalid device/implementation
-  // property) makes the variant unselectable. match_any and match_none tolerate
-  // such traits, so only reject variants in the default mode.
-  bool matchAll{
-      !required.test(unsigned(TP::implementation_extension_match_any)) &&
-      !required.test(unsigned(TP::implementation_extension_match_none))};
-  if (matchAll &&
-      (required.test(unsigned(TP::user_condition_false)) ||
-          required.test(unsigned(TP::invalid)))) {
-    return false;
-  }
-  // Matching a device or implementation selector requires a known target.
-  if (context.targetTriple().empty()) {
-    return true;
-  }
-  return llvm::omp::isVariantApplicableInContext(
-      vmi, matchContext, /*DeviceOrImplementationSetOnly=*/true);
-}
-
 // Check a loop-associated metadirective's variants against the loop nest they
 // apply to. The nest is not attached to the directive in the parse tree. It is
 // the next executable construct, either a following sibling or the first
@@ -709,7 +677,7 @@ void OmpStructureChecker::Enter(const parser::ExecutionPartConstruct &x) {
     const parser::OmpDirectiveSpecification *spec{variant.spec};
     // Skip variants that can never be selected on this compilation target so
     // that their associated loop is not diagnosed.
-    if (!mayVariantBeSelected(variant.selector, context_, matchContext)) {
+    if (!MayVariantBeSelected(variant.selector, context_, matchContext)) {
       continue;
     }
     auto assoc{llvm::omp::getDirectiveAssociation(spec->DirId())};
@@ -756,7 +724,7 @@ void OmpStructureChecker::CheckMetadirectiveVariantsWithoutLoop() {
       "This construct should contain a DO-loop or a loop-%s-generating construct"_err_en_US};
 
   for (const MetadirectiveLoopVariant &variant : variants) {
-    if (!mayVariantBeSelected(variant.selector, context_, matchContext)) {
+    if (!MayVariantBeSelected(variant.selector, context_, matchContext)) {
       continue;
     }
     auto assoc{llvm::omp::getDirectiveAssociation(variant.spec->DirId())};

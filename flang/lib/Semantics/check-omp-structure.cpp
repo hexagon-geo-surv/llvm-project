@@ -75,6 +75,16 @@ void OmpStructureChecker::Enter(const parser::ProgramUnit &) { //
   declareVariantPairs_.clear();
 }
 
+void OmpStructureChecker::Leave(const parser::ProgramUnit &) {
+  if (!metadirectiveLoopVariants_.empty()) {
+    // A declaration-only unit (module, submodule, or block data) has no
+    // execution part to follow the metadirective, so its loop-associated
+    // variants were never validated. A subprogram validates them while
+    // scanning the execution part, leaving none pending here.
+    CheckMetadirectiveVariantsWithoutLoop();
+  }
+}
+
 void OmpStructureChecker::Enter(const parser::MainProgram &x) {
   using StatementProgramStmt = parser::Statement<parser::ProgramStmt>;
   if (auto &stmt{std::get<std::optional<StatementProgramStmt>>(x.t)}) {
