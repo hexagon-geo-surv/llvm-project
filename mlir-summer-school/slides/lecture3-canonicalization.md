@@ -18,7 +18,7 @@ style: |
 
 <!-- Speaker notes:
 Welcome back. ~1 min. The arc so far: Session 1 = IR surgery by hand (walk, create, RAUW, erase). Session 2 = the same rewrite as a pattern, drivers do the orchestration. Today we remove the last piece of machinery: for a whole class of rewrites you don't write a pass OR a driver call — you attach tiny hooks to your ops, and the standard cleanup passes (-canonicalize, -cse) pick them up in every pipeline, forever. That's the "free lunch". Today is more conceptual than sessions 1-2, so it leans hard on predict-then-run quizzes: have your prediction ready before every run.
-Timing (canonical session budget): 0:00-0:05 warm-up quiz (this slide + next two), 0:05-0:45 lecture — core path ≈40 min, 0:45-0:50 exercise briefing, 0:50-1:20 hands-on (30 min), 1:20-1:30 solution walkthrough + wrap-up. Slides marked ⏱ are the pressure-release valves — skip them in this order if behind schedule: constants dedup/hoisting, hasCanonicalizeMethod, the canonicalize pass source, pass options, per-operand effects, CSE dominance algorithm, CSE pass-statistics capture, LICM payoff, cleanup zoo, -remove-dead-values, -symbol-dce, fun stats. Per-slide "~N min" estimates are brisk targets; the "Timing check" markers in the notes are cumulative core-path minutes (flex slides not counted).
+Timing (canonical session budget): 0:00-0:05 warm-up quiz (this slide + next two), 0:05-0:45 lecture — core path ≈40 min, 0:45-0:50 exercise briefing, 0:50-1:20 hands-on (30 min), 1:20-1:30 solution walkthrough + wrap-up. Slides marked ⏱ are the pressure-release valves — skip them in this order if behind schedule: constants dedup/hoisting, hasCanonicalizeMethod, the canonicalize pass source, pass options, per-operand effects, CSE dominance algorithm, CSE pass-statistics capture, LICM payoff, cleanup zoo, -remove-dead-values, -symbol-dce, fun stats, poison-in-the-adaptor quiz + answer (a pair), x-minus-x fold quiz + answer (a pair), region-effects quiz + answer (a pair). Per-slide "~N min" estimates are brisk targets; the "Timing check" markers in the notes are cumulative core-path minutes (flex slides not counted).
 -->
 
 ---
@@ -263,7 +263,66 @@ Note: `adaptor.getRhs()` (an `Attribute`) vs. `getRhs()` (the SSA `Value`) — y
 use **both** in one fold.
 
 <!-- Speaker notes:
-~1 min (core path: 11/40). This is THE beginner crash in folders: fold runs on every op instance, including ones with zero constant operands — the adaptor is all nulls then. cast<> on a null Attribute asserts. Teach the two safe idioms: matchPattern with m_Zero/m_One (null-safe), and dyn_cast_if_present. The last bullet prevents a subtle confusion in the next slide: inside fold, plain getRhs() still gives the operand Value, adaptor.getRhs() gives the Attribute-or-null. Both are useful in the same function.
+~1 min (core path: 11/40). This is THE beginner crash in folders: fold runs on every op instance, including ones with zero constant operands — the adaptor is all nulls then. cast<> on a null Attribute asserts. Teach the two safe idioms: matchPattern with m_Zero/m_One (null-safe), and dyn_cast_if_present. The last bullet prevents a subtle confusion on the upcoming arith.addi folder slide: inside fold, plain getRhs() still gives the operand Value, adaptor.getRhs() gives the Attribute-or-null. Both are useful in the same function.
+-->
+
+---
+
+## 🧠 Quiz: the guard is there — is it enough? ⏱
+
+An Exercise-3-shaped folder, with the null check from the previous slide dutifully in place:
+
+```cpp
+OpFoldResult MaxOp::fold(FoldAdaptor adaptor) {
+  Attribute lhs = adaptor.getLhs(), rhs = adaptor.getRhs();
+  if (!lhs || !rhs)
+    return {};                              // non-constant operand: no fold ✓
+  APInt l = cast<IntegerAttr>(lhs).getValue();
+  APInt r = cast<IntegerAttr>(rhs).getValue();
+  return l.sgt(r) ? lhs : rhs;
+}
+```
+
+```mlir
+%c1 = arith.constant 1 : i32
+%p  = ub.poison : i32        // "the result of UB" — a constant-like op!
+%m  = school.max %c1, %p : i32
+```
+
+What does `-canonicalize` do?
+
+① folds `%m` to `%c1` &nbsp;&nbsp; ② no fold — poison isn't a constant
+③ crash: `cast<Ty>() argument of incompatible type!` &nbsp;&nbsp; ④ folds `%m` to poison
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip together with the answer slide that follows; if pressed for time, present only one of the two fold quizzes in this deck); if skipped, say: the adaptor promises "some constant Attribute or null" — never a specific attribute class; ub.poison and dense_resource constants are NON-null attributes that walk straight past a null check, so always dyn_cast (dyn_cast_if_present covers both traps in one call). (+2 min if presented.)
+Give ~60 seconds. ② is the popular wrong answer ("poison isn't a real constant, surely the adaptor won't hand it to me").
+Answer: ③. ub.poison is ConstantLike (def PoisonOp : UB_Op<"poison", [ConstantLike, Pure]>, mlir/include/mlir/Dialect/UB/IR/UBOps.td:42), so the adaptor delivers a perfectly non-null ub::PoisonAttr; the null guard passes and cast<IntegerAttr> asserts "cast<Ty>() argument of incompatible type!" (llvm/include/llvm/Support/Casting.h:560).
+Provenance (verified in this checkout's history): commit b3be782c4d14 "[mlir][affine] Fix crash in linearize_index fold when multi-index is ub.poison (#183816)", Feb 2026 — the fold guarded with llvm::is_contained(adaptor.getMultiIndex(), nullptr) and poison walked right past it; part of a fuzzer-driven wave of same-shape fixes across arith/shape/tensor/tosa. The same trap with a different attribute class: arith.constant dense_resource<...> feeding folds that cast<DenseElementsAttr>.
+-->
+
+---
+
+## ✅ Crash (③): non-null does not mean `IntegerAttr` ⏱
+
+- `ub.poison` is **`ConstantLike`** — the adaptor hands your fold a perfectly **non-null** `ub::PoisonAttr`. The null guard passes; `cast<IntegerAttr>` asserts.
+- The adaptor's contract is *"some constant `Attribute` — or null"*. It never promises an attribute **class**: any `ConstantLike` op of any loaded dialect can feed your fold (`ub.poison`, `arith.constant dense_resource<...>` blobs, other dialects' constants).
+- The idiom from the `FoldAdaptor` slide already covers **both** traps in one call:
+
+```cpp
+auto lhs = dyn_cast_if_present<IntegerAttr>(adaptor.getLhs());
+if (!lhs)
+  return {};             // null OR the wrong attribute kind — no fold
+```
+
+Real bug, February 2026: `affine.linearize_index` guarded its fold with `is_contained(adaptor.getMultiIndex(), nullptr)` — poison walked right past it. Same-shape fixes landed across arith, shape, tensor, and tosa the same year.
+
+*(Bonus discussion: what **should** `max(x, poison)` fold to? Poison propagates — but handle it only if you mean it. `{}` is always safe.)*
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; paired with the quiz slide before it — skip or present the pair together. (+1 min if presented.)
+This is why the FoldAdaptor slide's "safe idioms" use dyn_cast_if_present rather than a null check + cast — and why Exercise 3's reference solution does too. The rule to say out loud: in a fold, every cast<> of an adaptor attribute is a bug; write dyn_cast and return {} for anything you don't recognize.
+Bonus discussion (1 min max, if the room bites): folding max(x, poison) to poison is semantically right (poison propagates through most ops), and some upstream folders do exactly that — but it requires understanding poison semantics for YOUR op; returning {} is never wrong.
 -->
 
 ---
@@ -295,7 +354,7 @@ OpFoldResult arith::AddIOp::fold(FoldAdaptor adaptor) {
 <sub>mlir/lib/Dialect/Arith/IR/ArithOps.cpp:419-437 (arrow annotations ours)</sub>
 
 <!-- Speaker notes:
-~2 min (core path: 13/40). Line-by-line: (1) identity fold returns an existing Value — this is quiz line C. (2)+(3) folds may TRAVERSE the IR read-only: getDefiningOp walks up the use-def chain (Session 1 skill) — creating/mutating other ops is forbidden, reading them is normal. (4) constFoldBinaryOp (mlir/include/mlir/Dialect/CommonFolders.h) is the upstream helper for element-wise constant folding: give it a lambda on APInt, it handles splat/dense/poison and returns an Attribute or null — this is quiz line A, producing %c5_i32. Question to plant for two slides from now: why does the zero check only look at the RHS? (Answer: Commutative trait — constants are already moved right.)
+~2 min (core path: 13/40). Line-by-line: (1) identity fold returns an existing Value — this is quiz line C. (2)+(3) folds may TRAVERSE the IR read-only: getDefiningOp walks up the use-def chain (Session 1 skill) — creating/mutating other ops is forbidden, reading them is normal. (4) constFoldBinaryOp (mlir/include/mlir/Dialect/CommonFolders.h) is the upstream helper for element-wise constant folding: give it a lambda on APInt, it handles splat/dense/poison and returns an Attribute or null — this is quiz line A, producing %c5_i32. Question to plant for the "why one form beats N forms" slide later in this section: why does the zero check only look at the RHS? (Answer: Commutative trait — constants are already moved right.)
 -->
 
 ---
@@ -325,6 +384,73 @@ OpFoldResult RankOp::fold(FoldAdaptor adaptor) {
 
 <!-- Speaker notes:
 ~1 min (core path: 14/40). Two messages, one breath each. (1) ConstantOp::fold returning its own attribute looks silly but is load-bearing: it is HOW the whole system extracts values from constants — the m_Constant matcher literally calls fold on ConstantLike ops to get the attribute out. (2) RankOp shows folds don't need constant operands at all: folds can use TYPES — type information is compile-time knowledge too. Same story for tensor.dim on tensor<8x4xf32> folding to 4 (upstream test canonicalize.mlir:28, verified). Note the "return IntegerAttr()" spelling of "no fold" — a default-constructed attribute is null.
+-->
+
+---
+
+## 🧠 Quiz: x − x = 0. Ship it? ⏱
+
+Real upstream code — `arith.subi`'s folder, **as it shipped until December 2024**:
+
+```cpp
+OpFoldResult arith::SubIOp::fold(FoldAdaptor adaptor) {
+  // subi(x,x) -> 0
+  if (getOperand(0) == getOperand(1))
+    return Builder(getContext()).getZeroAttr(getType());
+  ...
+}
+```
+
+`arith.subi` also works elementwise on tensors:
+
+```mlir
+func.func @s(%x: tensor<?xi32>) -> tensor<?xi32> {
+  %0 = arith.subi %x, %x : tensor<?xi32>
+  return %0 : tensor<?xi32>
+}
+```
+
+What did `-canonicalize` produce back then?
+
+① `arith.constant dense<0> : tensor<?xi32>` &nbsp;&nbsp; ② unchanged IR
+③ compiler abort &nbsp;&nbsp; ④ verifier error after the pass
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip together with the answer slide that follows; if pressed for time, present only one of the two fold quizzes in this deck); if skipped, say: returning an Attribute from fold() claims the result is expressible as ONE constant op of exactly the result type — "zero of type tensor<?xi32>" isn't (how many zeros?), so shaped folds must bail unless hasStaticShape(); the pre-2025 arith.subi folder crashed the compiler on exactly this. (+2 min if presented.)
+Give ~60 seconds. Trap: everyone focuses on the MATH (x-x is always 0, so ① looks right) — the bug is in the TYPE.
+Answer: ③. getZeroAttr(tensor<?xi32>) must build a DenseElementsAttr, which cannot represent a dynamically-shaped value: assert "type must have static shape" (mlir/lib/IR/BuiltinAttributes.cpp:1219). Valid input IR, dead compiler.
+Provenance (verified in this checkout's history): commit 1801fb4bd358 "[MLIR] Fixes arith.sub folder crash on dynamically shaped tensors (#118908)", Dec 2024 — the pre-fix code is shown verbatim on the slide; the fix (today's ArithOps.cpp:588-593) is quoted on the answer slide. Same root cause fixed independently in CommonFolders.h (#93102), tosa (#153420), tensor (#183785).
+Predict-then-run contrast for the answer slide, verified live on this tree: mlir-opt -canonicalize on a func with both `arith.subi %y, %y : i32` and `arith.subi %x, %x : tensor<?xi32>` → the i32 folds to %c0_i32, the dynamic tensor survives untouched.
+-->
+
+---
+
+## ✅ Abort (③): the math is right, the type can't hold it ⏱
+
+- `getZeroAttr(tensor<?xi32>)` must build a `DenseElementsAttr` — *how many zeros, exactly?* — and dies on `assert(type.hasStaticShape())`. Valid input, dead compiler.
+- **Returning an `Attribute` from `fold` is a claim:** "this result is expressible as *one constant op* of *exactly the result type*." Trivial element math doesn't make the **type** materializable.
+- The fix, in tree today (run it: the `i32` twin folds to `%c0_i32`; the dynamic tensor survives untouched):
+
+```cpp
+if (getOperand(0) == getOperand(1)) {
+  auto shapedType = dyn_cast<ShapedType>(getType());
+  // We can't generate a constant with a dynamic shaped tensor.
+  if (!shapedType || shapedType.hasStaticShape())
+    return Builder(getContext()).getZeroAttr(getType());
+}
+```
+
+<sub>mlir/lib/Dialect/Arith/IR/ArithOps.cpp:589-594; assert: mlir/lib/IR/BuiltinAttributes.cpp:1219</sub>
+
+- Sibling rule for the **`Value`** branch: the returned value must have **exactly** the result type — assert *"folder produced value of incorrect type"*. <sub>mlir/lib/Transforms/Utils/GreedyPatternRewriteDriver.cpp:526</sub>
+
+And when the type *is* fine — who turns your returned `Attribute` into an actual op? **Next slide.**
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; paired with the quiz slide before it — skip or present the pair together. (+2 min if presented.)
+The two claims a fold return makes, spelled out: an Attribute answer claims materializability (this quiz); a Value answer claims exact type equality (checked twice: the debug-build diagnostic "folder produced a value of incorrect type" in Operation.cpp:614 checkFoldResultTypes, and the greedy driver's assert cited on the slide).
+If someone asks about splats: dense<0> IS representable for static shapes of any size (it's stored as a splat), so the static tensor folds cheaply — size is not the issue here, staticness is.
+The closing question is the literal segue into the materializeConstant slide — don't answer it here.
 -->
 
 ---
@@ -826,6 +952,59 @@ func.func @dce_quiz(%arg0: memref<4xi32>, %arg1: index, %arg2: i32) {
 
 <!-- Speaker notes:
 ~2 min (core path: 33/40). Output is pre-captured — don't run live (command on the slide). Real output (module wrapper + @helper declaration trimmed; same result with -trivial-dce, verified). The two aha moments: (1) a dead load IS erased — Read effects are fine for deadness, the read is unobservable if nobody uses the value; contrast with CSE later where reads need care because of intervening writes. (2) dead memref.alloc IS erased despite having an (Allocate) effect — wouldOpBeTriviallyDeadImpl explicitly ignores Allocate effects on the op's OWN results: allocating something nobody can ever see is not observable. (Deallocation-side note: upstream even has a SimplifyDeadAlloc pattern that erases alloc+load+dealloc groups.) Where DCE runs: inside the greedy driver (-canonicalize), inside -cse, and standalone as -trivial-dce (this checkout; 37-line pass). None of them do liveness analysis — dead use-def CYCLES need region simplification's liveness fixpoint or -remove-dead-values.
+-->
+
+---
+
+## 🧠 Quiz: the op that ate its own print ⏱
+
+Until autumn 2024, linalg ops computed their memory effects **from their operands only** (memref operand → read/write; tensor operand → nothing). `%mapped` is unused — but the body prints:
+
+```mlir
+func.func @f(%arg : tensor<1xf32>) {
+  %init = arith.constant dense<0.0> : tensor<1xf32>
+  %mapped = linalg.map ins(%arg : tensor<1xf32>) outs(%init : tensor<1xf32>)
+            (%in: f32, %out: f32) {
+              vector.print %in : f32
+              linalg.yield %in : f32
+            }
+  return
+}
+```
+
+What did `-canonicalize` do back then?
+
+① nothing — the body obviously has a side effect
+② erased the whole `linalg.map`, print included
+③ kept it — ops with regions are conservatively treated as effectful
+④ refused with an error
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip together with the answer slide that follows); if skipped, say: effect interfaces are never recursed into regions automatically — an op that computes its effects from operands only is declared effect-free when its operands are tensors, and DCE will erase it BODY AND ALL; region-carrying ops want the RecursiveMemoryEffects trait. (+2 min if presented.)
+Give ~60 seconds. ① and ③ split the room: ① is "surely someone looks inside", ③ is the mirror-image misconception ("regions are automatically conservative"). Both wrong in an instructive way.
+Answer: ②. Implementing MemoryEffectsOpInterface is a claim of COMPLETE knowledge — isOpTriviallyDead asks the op, it never recurses into regions on its own (wouldOpBeTriviallyDeadImpl only pushes region ops under the HasRecursiveMemoryEffects trait — the DCE slide's fine print, now visceral). Tensor operands ⇒ "no effects"; result unused ⇒ trivially dead ⇒ map erased, print and all.
+Provenance (verified in this checkout's history + live): commit df0d249b6511 "[mlir] [linalg] fix side effect of linalg op (#114045)", Oct 2024, fixing issue #112881 — the fix is ONE trait: RecursiveMemoryEffects added to LinalgStructuredBase_Op (mlir/include/mlir/Dialect/Linalg/IR/LinalgStructuredOps.td:33). The regression test is this slide's IR: @recursive_effect at mlir/test/Dialect/Linalg/canonicalize.mlir:1519, its comment (lines 1517-1518) reading "Otherwise linalg.map without a user would be DCEd". Verified live on this tree: the map survives -canonicalize today.
+③'s kernel of truth: that IS the behavior for ops that declare NOTHING (no interface, no trait) — unknown ⇒ effectful. The trap is having an interface that answers incompletely.
+-->
+
+---
+
+## ✅ Erased (②): nobody looks inside your regions uninvited ⏱
+
+- Implementing `MemoryEffectsOpInterface` is a claim of **complete** knowledge: `isOpTriviallyDead` asks *the op* — it never recurses into regions on its own. Tensor operands ⇒ "no effects"; result unused ⇒ trivially dead ⇒ the map **and its print** were erased. Fixed October 2024.
+- Region bodies are consulted **only** under `RecursiveMemoryEffects` ("my effects include my body's effects"). The fix was **one trait** — plus a regression test whose comment says it all: *"Otherwise linalg.map without a user would be DCEd."*
+
+<sub>mlir/include/mlir/Dialect/Linalg/IR/LinalgStructuredOps.td:33; mlir/test/Dialect/Linalg/canonicalize.mlir:1517-1531</sub>
+
+- **③ is the mirror failure:** declare *nothing* — no interface, no trait — and your region op is *unknown ⇒ conservatively effectful*: nothing miscompiles, but DCE, CSE, and LICM silently give up around it. (`scf.execute_region` shipped that way until **October 2025**.)
+
+**For your own region-carrying ops:** `RecursiveMemoryEffects` should be the default; an effect interface that ignores the body is a promise that the body doesn't matter.
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; paired with the quiz slide before it — skip or present the pair together. (+1 min if presented.)
+The symmetry to draw on the whiteboard: two mirror failure modes, one trait. (a) interface without recursion ⇒ body invisible ⇒ MISCOMPILE (this quiz — the print vanished); (b) nothing declared ⇒ unknown ⇒ conservative ⇒ MISSED OPTIMIZATION everywhere near your op. The scf.execute_region example for (b) is real: RecursiveMemoryEffects was only added in commit 50b907751f4b (#164390, Oct 2025) — even core SCF shipped wrong for years.
+Callback to the Pure-and-friends slide: RecursiveMemoryEffects was defined there ("my effects are my body's effects" — scf.for/scf.if use it); this quiz is what happens when a region op skips it.
+Exercise tie-in: school.max/school.mac have no regions, so Exercise 3 checkpoint 1 only needs Pure — but the FIRST region-carrying op they define in real life hits one of these two failure modes, and neither points at the missing trait.
 -->
 
 ---

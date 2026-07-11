@@ -50,6 +50,12 @@ Interactivity principles used throughout the decks:
 - **Spot-the-bug.** Show realistic-but-broken pass/pattern code (the bugs are
   the ones beginners actually write: erasing during iteration, mutating on the
   failure path, bypassing the rewriter).
+- **Real-bug provenance.** Several ⏱ flex quizzes are distilled from actual
+  upstream bug-fix commits (crashes on block arguments, phantom pattern
+  success, unmaterializable fold results, dropped fastmath flags, region ops
+  DCE'd together with their side effects): the slides show the pre-fix code or
+  behavior, and the speaker notes cite the fixing commits and the in-tree
+  guardrails that exist because of each mistake.
 - **Every quiz has its answer + explanation in the speaker notes**, and quiz
   slides are followed by an answer slide so decks are self-contained handouts.
 - **Exercises are checkpointed.** Each exercise part comes with provided
@@ -129,7 +135,9 @@ After this session students can:
 4. **Generic vs. generated ops** (4'). `arith::AddIOp` as a typed "view" over
    `Operation *`; `isa<>`/`dyn_cast<>`; ODS-generated named accessors
    (`getLhs()`) vs. generic `getOperand(0)`. When to use which (generic code vs.
-   op-specific code).
+   op-specific code). **Flex quiz (from a real upstream crash):** `isa<>` on
+   `getDefiningOp()` segfaults on block arguments — the null-safe templated
+   `getDefiningOp<OpTy>()` is the idiom.
 5. **Use-def chains** (7' incl. quiz). `getDefiningOp`, `getUsers()`/`getUses()`,
    `hasOneUse`, `use_empty`; `replaceAllUsesWith`. Diagram of the use-list.
    **Quiz:** given a 4-op snippet, "after `%x.replaceAllUsesWith(%y)`, which ops
@@ -163,7 +171,11 @@ After this session students can:
    generated base class (`GEN_PASS_DEF`) → `runOnOperation()`;
    `OperationPass<func::FuncOp>` vs. any-op passes; `signalPassFailure`; pass
    options and statistics (one slide, exercise stretch goal uses a statistic);
-   the IR must verify after your pass.
+   the IR must verify after your pass. **Flex quiz:** a rewrite that creates
+   its replacement ops at the block terminator — RAUW rewires a user *above*
+   the cursor, and the after-pass verifier reports *operand does not dominate
+   this use* (insertion-point discipline; the verifier safety net, made
+   concrete).
 10. **Pass manager & pipelines** (⏱ flex block, 0' core — presented as time
     allows). Nesting tree diagram
     (`PassManager` rooted at `builtin.module`, `addNestedPass<func::FuncOp>`);
@@ -267,7 +279,12 @@ How annoying was the manual bookkeeping? → Session 2 motivation.
    empties and the iteration limit (which only bounds *outer* iterations) never
    triggers; `setMaxNumRewrites` is the safety net that turns the hang into a
    clean "did not converge" failure. Lesson: *every pattern must strictly
-   reduce something*.
+   reduce something*. **Flex quiz (real upstream bug):** the *phantom
+   success* — a pattern that returns `success()` on its nothing-to-do path
+   fires no listener events (so no hang), but books progress every iteration:
+   10 silent full iterations, then a `failure()` that `-canonicalize` swallows;
+   expensive-checks builds abort with *pattern returned success but IR did not
+   change*. Every "nothing to do" path must return `failure()`.
 7. **Debugging patterns** (⏱ flex, 0' core). `--debug-only=greedy-rewriter` /
    `--debug-only=pattern-application` (📸 pre-captured output): see which
    patterns fire and
@@ -286,6 +303,11 @@ How annoying was the manual bookkeeping? → Session 2 motivation.
    and replace through the rewriter; don't walk around and inspect neighboring
    IR and expect it to be converted). Full `runOnOperation` for a small
    conversion pass on a slide: build target + patterns + `applyPartialConversion`.
+   **Flex quiz:** what the (real, current) `complex.neg` lowering silently
+   loses — `fastmath` flags; created ops carry only what you pass, and neither
+   dropping all flags nor forwarding them all is right (attribute propagation
+   is a per-op decision; the over-forwarding direction broke `complex.abs`
+   upstream).
 10. **Type conversion, gently** (⏱ flex, 0' core; cast examples are 📸
     pre-captured). `TypeConverter::addConversion`;
     where materializations come from and what `builtin.unrealized_conversion_cast`
@@ -372,7 +394,13 @@ before predictions are collected.
    `arith` folders on slides (`addi(x,0)→x`; constant-constant via APInt).
    Where folding runs: the greedy driver (hence `-canonicalize`),
    `createOrFold`, … — "folders run *everywhere*, so they must be fast and
-   always-correct".
+   always-correct". **Flex quizzes (both from real upstream crashes):** (a) a
+   null-checked `FoldAdaptor` folder that still crashes — `ub.poison` /
+   `dense_resource` deliver *non-null* attributes of an unexpected class
+   (`dyn_cast_if_present` covers both traps in one call); (b) `subi(x,x) → 0`
+   on `tensor<?xi32>` — an `Attribute` fold result claims materializability as
+   one constant of exactly the result type, which a dynamic shape can't
+   satisfy.
 4. **Constants & materialization** (2'; the dedup/hoisting slide is ⏱). Why
    returning an `Attribute` is
    enough: `materializeConstant` dialect hook turns it back into an op;
@@ -413,6 +441,11 @@ before predictions are collected.
    effect on the op's own result doesn't keep it alive).
    **Quiz:** 5 ops — which can be erased? (dead pure op ✓, dead load ✓(with the
    right effects), store ✗, dead call ✗/depends, unregistered op ✗).
+   **Flex quiz (real upstream miscompile):** a `linalg.map` whose body prints
+   was fully DCE'd when effects were computed from operands only — region
+   bodies are consulted solely under `RecursiveMemoryEffects`; leaving the
+   trait off is either a miscompile (incomplete effect interface) or a
+   pessimization (nothing declared ⇒ unknown ⇒ conservative).
 9. **Region simplification** (3' incl. 🔴 live demo). Unreachable block
    elimination, dead
    block-argument elimination, identical block merging; part of `-canonicalize`.

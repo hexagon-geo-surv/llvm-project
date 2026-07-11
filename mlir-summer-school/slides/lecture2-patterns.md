@@ -20,7 +20,7 @@ style: |
 <!-- Speaker notes:
 Welcome back — session 2 of the Transformations module. ~1 min.
 SESSION BUDGET (canonical): 0:00-0:05 warm-up quiz | 0:05-0:45 lecture incl. embedded quizzes+demos (~40 min core path) | 0:45-0:50 exercise briefing | 0:50-1:20 hands-on (30 min) | 1:20-1:30 solution walkthrough + wrap-up.
-Core path ≈40 min; slides marked ⏱ are the pressure-release valves, in this order: Exercise 1 recap, Pattern #2 (cond_br), PatternRewriter API table, RewritePatternSet, PatternBenefit/Frozen, walkAndApplyPatterns, 📸 walk-driver demo, greedy mechanics 1/3, greedy mechanics 2/3, GreedyRewriteConfig knobs, termination quiz + answer, 📸 greedy-rewriter debug, type conversion, 📸 casts 1/2 + 2/2, signature pointer, rollback. Skip from wherever you are when a timing check says you're behind; never skip conversion-half core slides.
+Core path ≈40 min; slides marked ⏱ are the pressure-release valves, in this order: Exercise 1 recap, Pattern #2 (cond_br), PatternRewriter API table, RewritePatternSet, PatternBenefit/Frozen, walkAndApplyPatterns, 📸 walk-driver demo, greedy mechanics 1/3, greedy mechanics 2/3, GreedyRewriteConfig knobs, termination quiz + answer, 📸 greedy-rewriter debug, type conversion, 📸 casts 1/2 + 2/2, signature pointer, rollback, phantom-success quiz + answer, lost-fastmath quiz + answer. Skip from wherever you are when a timing check says you're behind; never skip conversion-half core slides.
 Yesterday students wrote a pass that changes IR by hand: walk, match, create, RAUW, erase.
 Today's promise: we delete most of that code. The rewrite itself stays; everything around it becomes framework.
 Two halves today: (1) rewrite patterns + the walk/greedy drivers, (2) dialect conversion for lowering.
@@ -928,6 +928,65 @@ And: compare with the walk-driver demo — same input, now fully folded, dead co
 
 ---
 
+# 🧠 Quiz: the polite pattern ⏱
+
+The rewrite is correct; every FileCheck test is green. Approve the review?
+
+```cpp
+LogicalResult matchAndRewrite(arith::MulIOp op,
+                              PatternRewriter &rewriter) const override {
+  APInt c;
+  if (!matchPattern(op.getRhs(), m_ConstantInt(&c)))
+    return success();                       // not our case — and no harm done!
+  if (!c.isPowerOf2())
+    return success();                       // ditto
+  Value shift = arith::ConstantOp::create(rewriter, op.getLoc(),
+      rewriter.getIntegerAttr(op.getType(), c.logBase2()));
+  rewriter.replaceOpWithNewOp<arith::ShLIOp>(op, op.getLhs(), shift);
+  return success();
+}
+```
+
+Input: one `arith.muli %x, %c7` — 7 is *not* a power of two. Under `applyPatternsGreedily` (default build, default config), this…
+
+① converges immediately — nothing to rewrite, nothing happens
+② hangs — the inner worklist never empties
+③ runs **all 10 iterations**, then returns `failure()` — and by default nobody tells you
+④ aborts with a fatal error
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip the answer slide with it); if skipped say: "returning success() on a nothing-to-do path is the other contract violation — the driver books phantom progress and never confirms the fixpoint; every no-op path must return failure()". (+2 if presented.)
+Give ~60 seconds; have the room commit before revealing.
+Answer: ③ — with ④ true only under MLIR_ENABLE_EXPENSIVE_PATTERN_API_CHECKS (which is why the stem pins a default build; a student answering ④ remembered the contract slide — credit it, then narrow to the default build). Mechanics: success() means "I changed the IR". No rewriter call was made, so no listener event fires and nothing is re-enqueued — the ITERATION finishes (that's why ② is wrong: no hang) — but the iteration is booked as "made progress" (processWorklist sets changed=true on any pattern success, GreedyPatternRewriteDriver.cpp:623-630), so the outer loop re-seeds the worklist, phantom-succeeds again, and only stops when maxIterations (10) runs out. applyPatternsGreedily returns failure() = did not converge; the canonicalizer swallows that by design ("Canonicalization is best-effort. Non-convergence is not a pass failure.", Canonicalizer.cpp:89).
+Provenance (verified in this checkout's history): commit 91c0ba6de8e7 "[OpenACC] Fix pattern API check failures in acc-loop-tiling pass (#188968)", April 2026 — a shipped pass returned success() when there was nothing to tile; caught when the pass ran under MLIR_ENABLE_EXPENSIVE_PATTERN_API_CHECKS ("pattern returned success but IR did not change"). The fix for this bug is literally one word; the same commit also fixes a second violation — IR moved via splice()/replaceAllUsesInRegionWith without notifying the rewriter, caught as "operation fingerprint changed" — a neat callback to the driver-is-listening slide.
+-->
+
+---
+
+# ✅ Ten silent iterations (③) — the phantom success ⏱
+
+- `success()` tells the driver **"I changed the IR."** No rewriter call happened, so nothing is re-enqueued — the *iteration* finishes (no hang) — but it's booked as progress, so the fixpoint is never confirmed: re-seed, "succeed", repeat… **10 iterations, then `failure()`** (= did not converge — remember?).
+- Default visibility: **none.** Canonicalization is best-effort; you pay ~10× pattern time on every function containing one such op, forever, silently.
+- The builds that *do* tell you:
+  - expensive-checks: `"pattern returned success but IR did not change"` <sub>mlir/lib/Transforms/Utils/GreedyPatternRewriteDriver.cpp:90-92</sub>
+  - `canonicalize{test-convergence=true}` → pass failure (the upstream test-suite setting)
+- **The contract really is *iff*.** Mutate-then-`failure()` (warm-up quiz) is one violation; **no-mutation-then-`success()` is the other.** Every "nothing to do" path must `return failure()` — or better:
+
+```cpp
+return rewriter.notifyMatchFailure(op, "rhs is not a constant power of two");
+```
+
+Real: a shipped upstream pass had exactly this bug until April 2026 (#188968); the fix for it is literally one word.
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; pairs with the previous quiz slide — skip or present both; if skipped say: "success() means 'I changed the IR' — a nothing-to-do success burns all 10 iterations and the resulting failure() is silently swallowed; expensive-checks builds abort on it". (+1 if presented.)
+Contrast with the termination quiz explicitly (if it was presented) — two different non-termination shapes: A→B/B→A re-enqueues via listener events and spins INSIDE iteration 1 (hang); the phantom success fires no events, so it burns OUTER iterations and exits with a quiet failure(). Understanding the difference proves you understood the worklist.
+The "no harm done" comments in the quiz code are the trap: the code really does no harm to the IR — it lies to the DRIVER, not to the IR. The contract is about information flow, not just mutation safety.
+Segue: notifyMatchFailure costs nothing in release and gives you the "** Match Failure : <reason>" lines in the --debug-only=greedy-rewriter trace for free (GreedyPatternRewriteDriver.cpp:770-776) — the next slide's captured output shows where those messages surface.
+-->
+
+---
+
 # 📸 Captured output: `--debug-only=greedy-rewriter` ⏱
 
 ```bash
@@ -1205,6 +1264,76 @@ Rule of thumb inside a conversion pattern:
 <!-- Speaker notes:
 ~1 min. The table is the take-home. Last row: conversion is a pre-order, lazy process — walking neighbors, getUsers(), or dominance queries during conversion observe an inconsistent mix; results are unreliable. Patterns should be local.
 getTypeConverter() is available on the pattern when it was constructed with a TypeConverter (pattern ctor (const TypeConverter&, MLIRContext*, benefit)).
+-->
+
+---
+
+# 🧠 Quiz: what did `NegOpConversion` lose? ⏱
+
+The real upstream pattern from a few slides ago, fed a flagged input — real output of `--convert-complex-to-standard` on this checkout:
+
+<div class="columns">
+<div>
+
+**Input**
+
+```mlir
+%n = complex.neg %arg0 fastmath<fast>
+       : complex<f32>
+```
+
+</div>
+<div>
+
+**Output**
+
+```mlir
+%0 = complex.re %arg0 : complex<f32>
+%1 = complex.im %arg0 : complex<f32>
+%2 = arith.negf %0 : f32
+%3 = arith.negf %1 : f32
+%4 = complex.create %2, %3 : complex<f32>
+```
+
+</div>
+</div>
+
+*(`fastmath<fast>` = the user's permission for aggressive FP optimization. The attribute defaults to `fastmath<none>` — and the printer elides defaults.)*
+
+It verifies. Every FileCheck test is green. The user who wrote `fastmath<fast>` is unhappy — **why**, and **which tool in your toolbox would have told you**?
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip the answer slide with it); if skipped say: "newly created ops carry ONLY what you pass to create() — the complex.neg lowering silently drops fastmath flags to this day; attribute propagation is a deliberate per-op decision, and no tool flags a dropped attribute". (+2 if presented.)
+Give ~60 seconds. Someone will spot it quickly: the arith.negf ops carry NO fastmath — i.e. fastmath<none>, the default (the on-slide gloss hands them the elision fact; the inference is still theirs to make).
+Both the input and output shown are real and were verified live on this checkout: build/bin/mlir-opt --convert-complex-to-standard on a func containing complex.neg with fastmath<fast>. complex ops carry a standard arith fastmath attribute (ComplexOps.td, ArithFastMathInterface).
+Second question's answer: NOTHING tells you. Not the verifier (the IR is valid), not the tests (unless a CHECK-SAME looks for the flag), not any -debug-only flag. Only a reviewer or a deliberate CHECK line. That's the point of the quiz.
+-->
+
+---
+
+# ✅ The flags are gone — and nothing will ever tell you ⏱
+
+- `arith.negf %0 : f32` means **`fastmath<none>`** — the default. `OpTy::create` gives the new op **exactly what you pass; nothing rides along** from the op you matched: not `fastmath`, not overflow flags, not discardable attributes (`replaceOpWithNewOp` transfers nothing either).
+- Failure mode: **silence.** No assert, no verifier error, no test diff — downstream, every FP optimization that needed `fast` is simply off.
+- Upstream re-fixed this class about a dozen times in `ComplexToStandard` alone (`complex.mul` propagates its flags today — the `neg` pattern on our slide *still* drops them in this checkout).
+- **The overcorrection is real, too:** blindly forwarding flags onto *every* op you create broke `complex.abs` — its internal NaN-detection ops must **not** promise `nnan`/`ninf`:
+
+```cpp
+// The lowering below requires NaNs and infinities to work correctly.
+arith::FastMathFlags fmfWithNaNInf = arith::bitEnumClear(
+    fmf, arith::FastMathFlags::nnan | arith::FastMathFlags::ninf);
+```
+
+<sub>mlir/lib/Conversion/ComplexToStandard/ComplexToStandard.cpp:42-44</sub>
+
+**Rule:** attributes are per-op *promises*. For each op you create, decide which of the matched op's promises still hold — don't drop them all by default, don't forward them all by reflex.
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; pairs with the previous quiz slide — skip or present both; if skipped say: "ops you create carry only what you pass — the neg lowering drops fastmath silently to this day; decide per created op which of the matched op's promises still hold". (+2 if presented.)
+Provenance (verified in this checkout's history): a representative early drop-side fix is be5b66670d86 "[mlir][complex] Support fastmath in the binary op conversion (#65702)" — threading getFastMathFlagsAttr() through the lowering, one pattern at a time; the very first was complex.abs in Aug 2023 (653f77690bb2, relanded as 2e53e1548074), and roughly a dozen sibling commits followed (exp/expm1, log, mulf, div, sqrt, trig, tanh, angle). The over-propagation fix is 9b225d01f8ed "Fix complex abs with nnan/ninf (#95080)", source of the bitEnumClear snippet.
+The two failure directions in one breath: dropping a flag is always SOUND but pessimizing (fewer promises); forwarding a flag can MISCOMPILE (a promise the new op doesn't keep — computeAbs relies on NaN propagation internally, so nnan on its own ops lets the canonicalizer fold its NaN-fixup path away: silent wrong answers on edge inputs).
+Exercise 2A tie-in: arith.shli carries overflow flags; the merged shli your MergeConsecutiveShl pattern creates has overflow<none> — which is exactly right here, because nsw/nuw on the merged shift would need a proof. Conservative-by-default is correct; propagate only what you can justify.
+Discardable attributes: same story, contractually weaker — any pass MAY drop them, so pipelines must never hang correctness on one; when a canonicalization rebuilds an op and you need metadata to survive, rewriter.clone + in-place mutation or an explicit setDiscardableAttrs is the pattern (upstream examples: tensor.pack canonicalization #111261, linalg generalization Generalization.cpp:68-73).
 -->
 
 ---

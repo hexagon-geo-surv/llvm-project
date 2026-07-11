@@ -16,33 +16,14 @@ style: |
 
 **MLIR Summer School — Transformations (1/3)**
 
+**Matthias Springer**
+
 <!-- Speaker notes:
 Welcome to the Transformations module. Session budget (canonical): 0:00-0:05 warm-up quiz | 0:05-0:45 lecture incl. embedded quizzes+demos (~40 min core path) | 0:45-0:50 exercise briefing | 0:50-1:20 hands-on (30 min) | 1:20-1:30 solution walkthrough + wrap-up.
-Core path ≈40 min: slides marked ⏱ are the pressure-release valves — skip them if behind schedule, in this order: LICM walk+library-call (+2), pass options & statistics (+2), InsertionGuard (+1), debugging toolkit (2) (+2), pipeline quiz + answers as a pair (+3), why-anchors-matter threading (+2), textual pipeline syntax (+2), PassManager tree (+2), failing & staying honest (+2), WalkResult (+1), traversal level 0 (+1), constants/Location (+1), nesting gotcha (+1), navigation map (+1).
+Core path ≈40 min: slides marked ⏱ are the pressure-release valves — skip them if behind schedule, in this order: LICM walk+library-call (+2), pass options & statistics (+2), InsertionGuard (+1), debugging toolkit (2) (+2), pipeline quiz + answers as a pair (+3), why-anchors-matter threading (+2), textual pipeline syntax (+2), PassManager tree (+2), failing & staying honest (+2), WalkResult (+1), traversal level 0 (+1), constants/Location (+1), nesting gotcha (+1), navigation map (+1), getDefiningOp-crash quiz + answers as a pair (+3), wrong-insertion-point quiz + answers as a pair (+3).
 Prerequisites the audience already has: compiler basics (SSA, "what is a pass"), MLIR IR structure (ops/regions/blocks/values), ODS/TableGen. They have NOT written C++ against the MLIR API yet — today is that day.
 Setup check (do it BEFORE 0:00): everyone should have the prebuilt LLVM/MLIR tree and the exercises/ project configured. All demos in this deck run with build/bin/mlir-opt from the llvm-project checkout root.
 ~30 s.
--->
-
----
-
-# The arc of this module
-
-| # | Session | One-sentence goal |
-|---|---------|-------------------|
-| **1** | **Your First Pass** | Change IR **by hand**: navigate, walk, create, replace, erase — inside a real pass. |
-| 2 | Rewrite Patterns & Dialect Conversion | Express rewrites as **patterns**, let **drivers** orchestrate them. |
-| 3 | The Free Lunch | Canonicalization, folding, CSE, DCE — plug *your* dialect into the standard cleanup. |
-
-**The running theme:** each session deletes hand-written machinery from the previous one.
-
-- Today we hand-roll everything: traversal, matching, replacement, cleanup.
-- Session 2: the *driver* does traversal + bookkeeping; you write only the rewrite.
-- Session 3: for many rewrites you don't even write a pass — op hooks do it.
-
-<!-- Speaker notes:
-Sell the arc: today will feel slightly laborious ON PURPOSE. At the end of session 3 they'll look back at today's code and understand why upstream MLIR is structured the way it is. One concrete promise: the ~20-line function we write today shrinks to ~10 lines in session 2 and partially to zero lines in session 3.
-~1 min.
 -->
 
 ---
@@ -76,8 +57,7 @@ func.func @warmup(%a: i32, %n: index) -> i32 {
   %r = arith.muli %a, %c2 {answer = 42 : i64} : i32
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
-  %sum = scf.for %i = %c0 to %n step %c1
-      iter_args(%acc = %r) -> (i32) {
+  %sum = scf.for %i = %c0 to %n step %c1 iter_args(%acc = %r) -> (i32) {
     %next = arith.addi %acc, %a : i32
     scf.yield %next : i32
   }
@@ -85,91 +65,865 @@ func.func @warmup(%a: i32, %n: index) -> i32 {
 }
 ```
 
-Point at: **① an operation ② a value ③ a block argument ④ an attribute ⑤ a region**
-
-Bonus: how many operations are written here?
+Call out **every single one** of: **① operations ② values ③ block arguments ④ attributes ⑤ regions**
 
 <!-- Speaker notes:
-Show of hands / call on people, one item at a time. This recaps their IR-structure session in their own words. The snippet round-trips through mlir-opt unchanged (verified).
-Answers (also on next slide):
-① Operations: func.func, arith.constant (x3), arith.muli, scf.for, arith.addi, scf.yield, func.return.
+Show of hands / call on people, one item at a time — push for completeness ("keep going, what else?"), not just one example per category. This recaps their IR-structure session in their own words. The snippet round-trips through mlir-opt unchanged (verified).
+Answers (no separate answer slide — deliver them verbally right here):
+① Operations: func.func, arith.constant (x3), arith.muli, scf.for, arith.addi, scf.yield, func.return. (9 as written; 10 counting the implicit builtin.module that mlir-opt wraps around it — worth mentioning even though it's not asked.)
 ② Values: %a, %n, %c2, %r, %c0, %c1, %sum, %i, %acc, %next — every %-thing.
 ③ Block arguments: %a, %n (entry block of the func body region), and %i, %acc (scf.for body block). The loop IV being a block argument surprises people — good discussion moment.
 ④ Attributes: {answer = 42 : i64} on the muli; also the 2 : i32 payload of arith.constant, the function name @warmup (sym_name), and the function type — attributes are everywhere, not just in braces.
 ⑤ Regions: the func body, and the scf.for body.
-Bonus: 9 ops as written; 10 counting the implicit builtin.module that mlir-opt wraps around it.
+Key takeaways to fold in while giving the answers: (1) attributes are compile-time constant data attached to an op — not just the {…} dictionary, also constant payloads and function names; (2) the loop IV is a block argument — MLIR has no phi nodes, block arguments play that role; (3) values come in exactly two forms — that's literally the C++ class design, coming up next.
 ~2 min — keep it rapid-fire (one item at a time); the warm-up block ends at 0:05.
 -->
 
 ---
 
-# ✅ Warm-up answers
+# From words to classes: the C++ names
 
-```mlir
-func.func @warmup(%a: i32, %n: index) -> i32 {   // op; %a, %n = BLOCK ARGUMENTS
-  %c2 = arith.constant 2 : i32                   // op; "2 : i32" is an ATTRIBUTE
-  %r = arith.muli %a, %c2 {answer = 42} : i32    // op; {answer=42} = attribute
-  ...
-  %sum = scf.for %i = %c0 to %n step %c1         // op; %sum = OpResult (a Value)
-      iter_args(%acc = %r) -> (i32) {            // { ... } = REGION
-    %next = arith.addi %acc, %a : i32            // %i, %acc = block arguments!
-    scf.yield %next : i32
-  }
-  return %sum : i32
-}
-```
-
-- **9 operations** as written (10 with the implicit `builtin.module`).
-- Every `%name` is a **`Value`** — either an op result or a block argument.
-- The loop induction variable `%i` and `%acc` are **block arguments** of the region's entry block — not results of `scf.for`.
+| In the text… | …is this C++ class |
+|---|---|
+| an **operation** (`arith.muli`, `scf.for`, …) | `Operation` |
+| a **value** (any `%name`) | `Value` → `OpResult` / `BlockArgument` |
+| a **use** of a value/block | `OpOperand` / `BlockOperand` |
+| an **attribute** (`{answer = 42 : i64}`, …) | `Attribute` (e.g. `IntegerAttr`, `StringAttr`, …) |
+| a **region** (the `{ ... }` body) | `Region`, containing `Block`s |
 
 <!-- Speaker notes:
-Key takeaways to say out loud: (1) attributes are compile-time constant data attached to an op — not just the {…} dictionary, also constant payloads and function names; (2) the loop IV is a block argument — MLIR has no phi nodes, block arguments play that role; (3) values come in exactly two kinds — that's literally the C++ class design, which is the next slide.
-Presenter flourish for the bonus: 9 ops are written here — then reveal the 10th, the implicit builtin.module that mlir-opt wraps around top-level IR.
-~1 min. This closes the 0:00-0:05 warm-up block; the ~40-min lecture core path starts on the next slide.
+Bridge slide: every category from the warm-up quiz gets its exact C++ name here, before the object-model slides start using them without re-introducing them.
+The split of "value" into OpResult/BlockArgument previews the "Value: exactly two forms" slide later — don't over-explain here, just plant the names.
+"Use" is subtle and easy to skip past: a value/block doesn't hold its uses, its USERS do — each operand slot or branch target IS an OpOperand/BlockOperand. This previews "Use-def chains" (the edge that knows both endpoints) and the later OpOperand/BlockOperand deep-dive slide — again, just plant the two names here, don't explain the mechanism yet.
+Attribute is deliberately shown as an umbrella too, mirroring Value — {answer = 42 : i64} is concretely an IntegerAttr; a string attribute would be StringAttr; etc. Same casting story (isa/dyn_cast) applies to Attribute as to Operation and Value — foreshadow only, full treatment isn't in this lecture.
+Block has no dedicated bullet in the quiz (only "block ARGUMENT" does) — call that out explicitly, it's a deliberate gap the quiz left open, and this slide closes it.
+~1 min.
+-->
+
+---
+
+# The big picture: how the core IR classes relate (simplified)
+
+```text
+                          ┌──────────────────────────────────────┐
+                     ┌──┐ │   ┌──────────────────────────────┐   │  ┌──┐
+                     │  ▼ ▼*  │*                             ▼   │  │  ▼
+ ┌────────────┐ *   ┌───────────┐      * ┌────────┐      * ┌───────────┐      * ┌───────────────┐
+ │ ConcreteOp │ ──► │ Operation │ ◆───── │ Region │ ◆────▶ │   Block   │ ◆────▶ │ BlockArgument │
+ └────────────┘     └───────────┘ ◀───── └────────┘ ◀───── └───────────┘ ◀───── └───────────────┘
+                         ◆                                      ▲  │                  │
+                         │                                      │  │                  │
+                         │                                      │  │                  │
+                         ├──────────────────┬────────────────┐  │  │                  │
+                         │*                 │*               │* │* ▼                  │
+                    ┌───────────┐      ┌──────────┐     ┌──────────────┐              │
+                    │ OpOperand │      │ OpResult │     │ BlockOperand │              │
+                    └───────────┘      └──────────┘     └──────────────┘              │
+                      │  ▲  │* ▲            │                │   ▲                    │
+                      └──┘  │  │            ▽                └───┘                    │
+                            │  │       ┌─────────┐                                    │
+                            │  └────── │  Value  │ ◁──────────────────────────────────┘
+                            └────────► └─────────┘
+```
+
+`─▶` Pointer     `◆─` Aggregate (coupled lifetime)     `─▷` Inheritance
+
+<!-- Speaker notes:
+FLEX SLIDE — capstone/overview, present after (or in place of) the individual deep-dive slides if short on time; if skipped, say: everything's embedded until the graph recurses into a new Block or Operation — that's the one-sentence summary of the whole memory-layout arc.
+The loop above Operation and above Block is the same Prev/Next mechanism drawn twice, once per container: Operation is spliced into its parent Block's operation-list, Block is spliced into its parent Region's block-list.
+All three children hanging off Operation (`OpOperand`, `Value`, `BlockOperand`) are aggregated the same way — that's why all three get their own `◆`, not just Region. `OpOperand ──► Value` and `BlockOperand ──► Block` are the two "outgoing" reference edges from those aggregated children back into the rest of the graph.
+Simplified deliberately — relationships NOT drawn here, mention only if asked: Operation's own `block` field (a reference up to its PARENT Block, separate from the Prev/Next loop); Block's `arguments` vector (references Value/BlockArgumentImpl, not embedded); Block's `firstUse` (references a BlockOperand living inside some OTHER op); Value's `firstUse` (references the head of its OpOperand use-chain); OpOperand/BlockOperand also have their own Prev/Next-style loops (nextUse/back) for their use-chains, omitted here to avoid a third loop shape.
+The recursion loop (Block ──► Operation) is THE loop that makes IR a tree of arbitrary depth — nested regions inside nested regions inside nested regions, all through this one edge repeating.
+~2 min.
 -->
 
 ---
 
 # The C++ object model: it's `Operation*` all the way down
 
-At runtime, *every* op — `arith.addi`, `scf.for`, `func.func`, even `builtin.module` — is a `mlir::Operation`:
+At runtime, *every* op — `arith.addi`, `scf.for`, `func.func`, even `builtin.module` — is a `mlir::Operation`. Take one concrete, fully-written-out example:
 
-```text
-Operation                     (heap object, always handled as Operation*)
- ├─ name        "arith.muli"
- ├─ location    Location (where it came from — file:line, or unknown)
- ├─ operands    [Value, Value, ...]      ← uses of values defined elsewhere
- ├─ results     [OpResult, ...]          ← the values THIS op defines
- ├─ attributes  {answer = 42 : i64, ...} ← compile-time constant data
- └─ regions     [Region, ...]
-      Region
-       └─ blocks [Block, ...]
-            Block
-             ├─ arguments  [BlockArgument, ...]
-             └─ operations [Operation, ...]   ← recursion!
+```mlir
+%r = arith.muli %a, %b : i32                    // custom assembly format (pretty syntax)
+%r = "arith.muli"(%a, %b) : (i32, i32) -> i32   // generic syntax — every op supports this
 ```
 
-The nesting you know from the textual IR **is** the C++ ownership structure: ops own regions, regions own blocks, blocks own ops.
+```text
+Operation "arith.muli"           (always heap-allocated; handled as Operation*)
+ ├─ name        "arith.muli"
+ ├─ location    Location                  ← file:line, or unknown
+ ├─ operands    [OpOperand, OpOperand]     ← exactly 2: edges to %a, %b (defined elsewhere)
+ ├─ results     [Value : i32]              ← exactly 1: %r, the value THIS op defines
+ ├─ successors  []                         ← empty — muli isn't a branch, has no successors
+ ├─ attributes  {}                         ← empty — no *discardable* attributes here
+ ├─ properties  { overflowFlags: none }    ← the ODS "overflowFlags" arg — default, elided when printed
+ └─ regions     []                         ← empty — muli has no nested regions
+```
+
+The textual IR you read **is** a 1:1 serialization of this in-memory object graph — there's no separate AST.
 
 <!-- Speaker notes:
-This is the single most important slide of the first half. The textual IR they've been reading is a 1:1 serialization of this object graph. There is no separate AST: what you print is what's in memory.
-Emphasize: Operation is uniform — a module and an addi are the same C++ class, differing only in name, operand/result counts, attributes, and regions. This uniformity is what makes generic passes possible.
+This is one of the two most important slides of the first half (the other is the regions version, two slides from now). There is no separate AST: what you print is what's in memory.
+The generic syntax line maps almost literally onto the diagram's rows: the quoted `"arith.muli"` is the name field, `(%a, %b)` are the operands, `(i32, i32) -> i32` are the operand/result types — every op, registered or not, prints this way; `arith.muli %a, %b : i32` is just a nicer custom form the dialect opted into. Good one-liner if asked "how does mlir-opt know how to print this without a custom printer?": it doesn't — it falls back to generic syntax.
+Emphasize: Operation is uniform — a module and an addi are the same C++ class, differing only in name, operand/result/successor counts, attributes, properties, and regions. This uniformity is what makes generic passes possible.
+Deliberately a boring, fully-concrete example (2 operands, 1 result, no successors, no discardable attrs, no regions) so every row of the diagram maps to something visible in the one line of IR above it — no hidden defaults to explain away yet, except properties (see below).
+"operands" are OpOperand, not raw Value — an OpOperand is a Value edge that also remembers its owner (needed later for use-lists; the "Use-def chains" slide names it properly and explains why). "results" are handed back to you as Value/OpResult, but Operation does not literally store a field of OpResult objects — the later flex slide ("what's really in memory") shows the real, more surprising storage.
+attributes vs. properties, the subtlety: {answer = 42} on the warm-up slide's muli is a discardable ATTRIBUTE (arbitrary, in the generic attrs dictionary); overflowFlags is an ODS-declared inherent argument stored as a PROPERTY (compact POD data, not in attrs) — that's why attributes can be truly {} here while the op still carries ODS-level data. Full mechanics on the "what's really in memory" flex slide (propertiesStorageSize, OpProperties row).
+successors only matter for branch-like ops (cf.br, cf.cond_br); muli has ::mlir::OpTrait::ZeroSuccessors — verified in the generated MulIOp class (ArithOps.h.inc).
 Handle discipline: Operation is always passed as Operation* (pointer) or Operation& — never by value.
-~3 min.
+~2 min.
 -->
 
 ---
 
-# `Value`: exactly two kinds
+# Building that op, the fully generic way
+
+No ODS, no typed op class — just `OperationState`, the same mechanism the *parser* uses for every op in a `.mlir` file (and the only way to build an **unregistered** op):
+
+```cpp
+Value a = ..., b = ...;                     // %a, %b already exist as Values
+Location loc = ...;
+
+OperationState state(loc, "arith.muli");
+state.addOperands({a, b});                  // exactly 2 operands
+state.addTypes(b.getType());                // exactly 1 result, type i32
+// no addAttribute(...)
+// no addRegion()
+
+Operation *op = Operation::create(state);   // create a "detached" operation (no owner)
+op->dump();                                 // dump to stderr
+op->destroy();                              // deallocate memory (incl. nested IR)
+```
+
+`OperationState` is a plain builder-of-a-struct: you fill in name, operands, result types, attributes, successors, regions — by hand — then `Operation::create` allocates the real `Operation` from it.
+
+<!-- Speaker notes:
+Intentionally the "hard way" — nobody writes this in day-to-day pass code, but seeing it once demystifies what OpTy::build/create actually do (next slide): they are convenience wrappers that fill in exactly this struct for you, using the ODS argument names you already know.
+Mention in passing: this is also how mlir-opt's textual parser builds ops, and the only path available for ops from dialects the tool doesn't have compiled in (-allow-unregistered-dialect).
+Deliberately not talking about insertion/OpBuilder yet — that's its own section later ("OpBuilder: a cursor into the IR" onward). For now this op simply exists, fully formed, wherever it happens to sit.
+~2 min.
+-->
+
+---
+
+# Building that op with the generated `build()` function
+
+Same two steps as the slide before — `OperationState`, then `Operation::create` — but the *filling-in* step is now generated instead of hand-written:
+
+```cpp
+Value a = ..., b = ...;               // %a, %b already exist as Values
+Location loc = ...;
+
+OperationState state(loc, arith::MulIOp::getOperationName());
+arith::MulIOp::build(builder, state, a, b, /*overflowFlags=*/{});  // fills in operands/types/attrs
+Operation *op = Operation::create(state);                          // create a "detached" operation
+op->dump();                                                        // dump to stderr
+op->destroy();                                                     // deallocate memory (incl. nested IR)
+```
+
+The `build()` function is auto-generated from the ODS definition.
+
+<!-- Speaker notes:
+The bridge slide: same skeleton as "the fully generic way", one step swapped from hand-written to generated.
+build() overloads mirror the build(...) forms students already saw in the ODS session — one for each way of constructing the op (with/without explicit result types, with/without optional attributes, etc.).
+The `builder` parameter here is required by the generated signature but not doing anything insertion-related in this step — that's deliberately not the topic yet; `OpTy::create(builder, loc, ...)` (later, once OpBuilder is introduced properly) is where build() and insertion actually get fused into one call.
+~2 min.
+-->
+
+---
+
+# The object model, with regions: `scf.for`
+
+An op with nested IR (regions and blocks).
+
+```mlir
+%sum = scf.for %i = %c0 to %n step %c1 iter_args(%acc = %r) -> (i32) {
+  %next = arith.addi %acc, %a : i32
+  scf.yield %next : i32
+}
+```
 
 ```text
-            Value            (one pointer; pass BY VALUE; compare with ==)
-           /     \
-     OpResult   BlockArgument
-     "defined    "defined by
-      by an op"   a block header"
+Operation "scf.for"                       (heap-allocated)
+ ├─ operands    [OpOperand x4]             %c0, %n, %c1, %r
+ ├─ results     [Value : i32]              %sum
+ └─ regions     [Region]                   embedded IN this op's allocation — not separate!
+        Region
+         └─ blocks  [Block*]               Block IS separately heap-allocated (`new Block`)
+              Block
+               ├─ arguments  [BlockArgument x2]        %i, %acc
+               └─ operations [Operation*, Operation*]  heap-allocated ops — recursion!
+                    Operation "arith.addi"
+                    Operation "scf.yield"
 ```
+
+<!-- Speaker notes:
+Directly answers "aren't Blocks also heap-allocated?": yes, unambiguously — `new Block` is a real, separate allocation, unlike Region.
+The nesting you know from the textual IR IS the C++ ownership structure: ops own regions (embedded), regions own blocks (a linked list of separately-allocated Blocks), blocks own ops (recursion) — there is no separate AST.
+Operand count reminder: lowerBound, upperBound, step, then one operand per iter_arg (%r here) — 4 total for one iter_arg; results mirror the iter_args 1:1 (1 result here, %sum).
+This is the slide to point back to during "Traversal, level 0" — that recursive printOperation function walks exactly this structure.
+~2 min.
+-->
+
+---
+
+# ⏱ `Operation`s in a `Block` form a doubly-linked list
+
+```text
+┌──────────────────────────────────────────┐
+│ ilist_node_with_parent<Operation, Block> │
+├──────────────────────────────────────────┤
+│ NodeBase *Prev, *Next                    │
+└─────────────────────△────────────────────┘
+                      │
+                ┌───────────┐
+                │ Operation │
+                └───────────┘
+```
+
+Example:
+```
+^bb0:
+"test.dummy_op1"() : () -> ()
+"test.dummy_op2"() : () -> ()
+"test.dummy_op3"() : () -> ()
+```
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; if skipped, say: Operation inherits ilist_node_with_parent<Operation, Block> for its Prev/Next splice-into-Block.operations linkage — same trick as Block splicing into Region.blocks — and separately (privately) TrailingObjects, which contributes no fields, just the offset arithmetic for the layout on the next slide.
+Prev/Next here are NOT the same field as Operation's own `block` pointer (next slide) — `block` is the PARENT pointer (which Block owns me), Prev/Next are the SIBLING links (who comes before/after me in that Block's operation list). Two different relationships, two different sources: one is Operation's own field, the other is inherited.
+~1 min.
+-->
+
+---
+
+# ⏱ What's *really* in memory: `class Operation`'s fields
+
+One `malloc`, three zones — results are a **prefix**, almost everything else is in the **suffix**:
+
+```text
+               ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+               ├─────────── PREFIX: results (one OpResultImpl per result, in reverse order) ──────────────────────┤
+               │ OpResultImpl[numResults]                // OpResultImpl = { Type, use-list head }                │
+Operation* ──► ├───────────────────────────────── the `Operation` object itself ──────────────────────────────────┤
+               │ Block *block;                                                                                    │
+               │ Location location;                                                                               │
+               │ unsigned orderIndex;                    // cached position within block (mutable)                │
+               │ const unsigned numResults, numSuccs;                                                             │
+               │ unsigned numRegions : 23;                                                                        │
+               │ bool hasOperandStorage : 1;                                                                      │
+               │ unsigned propertiesStorageSize : 8;                                                              │
+               │ OperationName name;                                                                              │
+               │ DictionaryAttr attrs;                                                                            │
+               ├─────────────── trailing, right after the object (order per TrailingObjects<...>) ────────────────┤
+               │ OperandStorage             // { capacity:31, isStorageDynamic:1, numOperands, OpOperand *ptr }   │
+               │ OpProperties               // propertiesStorageSize bytes of ODS-declared POD data               │
+               │ BlockOperand[numSuccs]     // inline array of successors                                         │
+               │ Region[numRegions]         // inline array of regions                                            │
+               │ OpOperand[numOperands]     // inline array of operands                                           │
+               └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; if skipped, say: Operation is one allocation sized exactly for its result/operand/region/successor counts, with results stored as a prefix and operands/regions/successors trailing — the next slide's takeaway (what's separate vs. embedded) is the one to deliver verbally if this is skipped.
+The arrow is verified straight from the header's own doc comment (Operation.h:41-47): "[Result2, Result1, Result0, Operation] ^ this is where `Operation*` pointer points to." Point at it explicitly — the pointer everyone holds points at the START of the object's own fields, never at the prefix.
+The surprising bit worth calling out explicitly: OpResult is NOT a stored field — what's stored (as a prefix, before the Operation pointer) is an array of OpResultImpl (InlineOpResult for the first few results, OutOfLineOpResult beyond a small inline capacity), each just {Type, use-list head}. Operation::getResult(i) constructs an OpResult (owner + result number) on demand from that storage.
+Why a prefix AND trailing, instead of one side? Historical/perf: it lets Operation* stay a stable "middle" pointer that both directions can offset from with O(1) index arithmetic, and keeps the common no-result/no-operand case allocation-free on that side.
+OperandStorage vs. OpOperand[]: don't let students conflate the two rows — OperandStorage is a small, ALWAYS-present header (capacity/count/pointer); the OpOperand array it points at is usually (not always!) the trailing slot shown right below. This is the one place in the whole layout where "it's all one allocation" can be false for a *specific* op instance, not just categorically (like Block/Region) — worth calling out if anyone's mental model was "everything trailing is permanently fixed at construction".
+attrs is a single DictionaryAttr — MLIR does not allocate one heap object per attribute; the whole {k: v, ...} dictionary is one shared, immutable object, and {} is a shared empty instance (no allocation on the fast path).
+Don't derive a permanent mental model from the exact TrailingObjects order — treat this as "here's evidence it's compact and correct", not something you need memorized to write passes.
+The Region row (embedded, not a pointer!) is the hook into the next slide.
+(+2 if presented.)
+-->
+
+---
+
+# 🧠 Quiz (1/6): change a result's type
+
+Starting op: `%r = "test.op"(%a, %b) : (i32, i32) -> i32`
+
+Target: `%r = "test.op"(%a, %b) : (i32, i32) -> i64`
+
+How would you get there?
+
+<!-- Speaker notes:
+Give ~30 seconds per case; this is the payoff quiz for the whole memory-layout arc, and every answer traces back to a field from the box two slides ago. Don't reveal the in-place/new-op split via the question wording; let them reason it out from the fields.
+~30 s.
+-->
+
+---
+
+# ✅ (1/6): change a result's type
+
+```cpp
+op->getResult(0).setType(b.getI64Type());
+```
+
+**In place.** A result's type lives in `OpResult` — a single-field overwrite.
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (2/6): add a result
+
+Starting op: `%r = "test.op"(%a, %b) : (i32, i32) -> i32`
+
+Target: `%r, %s = "test.op"(%a, %b) : (i32, i32) -> (i32, i32)`
+
+How would you get there?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ (2/6): add a result
+
+**Can't be done in place** — `numResults` is `const`; results are a fixed-size prefix.
+
+Must build a new op with both result types, then:
+
+```cpp
+op->getResult(0).replaceAllUsesWith(newOp->getResult(0));  // only %r had prior uses
+op->erase();
+```
+
+<!-- Speaker notes:
+Note the asymmetry vs. a same-arity replacement: old op has 1 result, new op has 2 — you RAUW only the corresponding result (index 0 → index 0), not the whole ResultRange (mismatched counts would assert). %s is brand new; nothing to replace it with.
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (3/6): change an operand
+
+Starting op: `%r = "test.op"(%a, %b) : (i32, i32) -> i32`
+
+Target: `%r = "test.op"(%c, %b) : (i32, i32) -> i32`
+
+How would you get there?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ (3/6): change an operand
+
+```cpp
+op->setOperand(0, c);
+// alternative: get the OpOperand first, then assign through it
+// op->getOpOperand(0).set(c);
+```
+
+**In place.** Overwrite the `OpOperand`'s `value` field (and update linked lists).
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (4/6): add an operand
+
+Starting op: `%r = "test.op"(%a, %b) : (i32, i32) -> i32`
+
+Target: `%r = "test.op"(%a, %b, %c) : (i32, i32, i32) -> i32`
+
+How would you get there?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ (4/6): add an operand
+
+```cpp
+op->insertOperands(2, {c});
+```
+
+**In place.** `OperandStorage` is the one growable part — it can `malloc` a bigger buffer, transparently.
+
+<!-- Speaker notes:
+Aside if asked (not the point here): this succeeds at the C++ level on any op, but a fixed-arity op like arith.muli would fail verification afterward — "compiles fine, verifier catches it," same as earlier in the deck. Not relevant for this generic test.op example.
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (5/6): add an attribute
+
+Starting op: `%r = "test.op"(%a, %b) : (i32, i32) -> i32`
+
+Target: `%r = "test.op"(%a, %b) {answer = 42 : i64} : (i32, i32) -> i32`
+
+How would you get there?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ (5/6): add an attribute
+
+```cpp
+op->setAttr("answer", b.getI64IntegerAttr(42));
+```
+
+**In place.** `attrs` is one `DictionaryAttr` field; setting an attribute just swaps it for a new dictionary.
+
+`DictionaryAttr`'s own definition (`DictionaryAttrStorage`) is just as thin — an array of `NamedAttribute`, itself just a `{name, value}` pair of `Attribute`s (**not** separately uniqued):
+
+```cpp
+struct DictionaryAttrStorage : public AttributeStorage {
+  ArrayRef<NamedAttribute> value;   // NamedAttribute = { Attribute name; Attribute value; }
+};
+// for this example: NamedAttribute{ StringAttr("answer"), IntegerAttr(42 : i64) }
+```
+
+⚠️ **All attributes are singletons, uniqued in the `MLIRContext`.** Creating `{answer = 42 : i64}` (or any attribute) allocates it in the context's arena (`BumpPtrAllocator`) — and it stays there for the **rest of the context's lifetime**, even if nothing references it anymore. No refcounting, no GC: creating many distinct attributes in a long-running context is memory that never comes back until the context itself is destroyed.
+
+<!-- Speaker notes:
+C++ API details (setAttr, insertOperands, etc.) are previewed here but formally introduced later in the OpBuilder/rewriter sections — for now the point is just "can the existing Operation do this in place?".
+DictionaryAttrStorage verified at build/tools/mlir/include/mlir/IR/BuiltinAttributes.cpp.inc:254-277 — exactly one field, an ArrayRef<NamedAttribute>, copied into the allocator via allocator.copyInto(value). NamedAttribute (Attributes.h:164-212) is NOT uniqued — it's a plain 2-pointer value type {Attribute name, Attribute value}, built transiently and copied by value into the DictionaryAttr's own array; only the array AS A WHOLE goes through the uniquer, as one DictionaryAttr.
+If asked "how many new uniqued objects does this one setAttr call create (cold cache)?": 4, not 3 — b.getI64IntegerAttr(42) uniques an i64 IntegerType AND an IntegerAttr(42) (2 objects, easy to undercount as 1); setAttr(StringRef,...) uniques a StringAttr("answer") for the name (easy to forget entirely); then setAttr(StringAttr,...) builds a scratch NamedAttrList (ordinary heap memory, NOT uniqued) and calls attributes.getDictionary(ctx), which uniques exactly one new DictionaryAttr. Total: 1 Type + 3 Attributes = 4. NamedAttribute/NamedAttrList are never separately interned — swap them out of any "what gets interned" count.
+The lifetime warning generalizes to ALL attributes/types, not just DictionaryAttr — StorageUniquer::StorageAllocator (mlir/include/mlir/Support/StorageUniquer.h:93-137) wraps a plain llvm::BumpPtrAllocator: bulk-freed only when the MLIRContext dies, never per-object. Practical consequence: passes that mint a fresh, never-reused attribute per op/iteration (e.g. unique debug tags) leak for the process's lifetime — prefer reusing/interning your own attribute values where possible.
+~45 s.
+-->
+
+---
+
+# 🧠 Quiz (6/6): add a region
+
+Starting op: `%r = "test.op"(%a, %b) : (i32, i32) -> i32`
+
+Target: `%r = "test.op"(%a, %b) ({ ^bb0: }) : (i32, i32) -> i32`
+
+How would you get there?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ (6/6): add a region
+
+**Can't be done in place** — `numRegions` is `const` too; regions are a fixed-size suffix.
+
+Must build a new op with the region attached, then RAUW + erase the old one — same recipe as 2/6.
+
+<!-- Speaker notes:
+The pattern to land across all six: COUNTS baked into the layout at construction (numResults, numRegions, numSuccs) are permanently fixed — change them by building a new op and replacing the old one. CONTENT within an existing slot (a result's type, an operand's value, the attrs dictionary) is freely mutable — that's just overwriting a field. Operand COUNT is the one exception that's also mutable, via the OperandStorage indirection, because rewriting operand lists is so common in passes.
+~30 s.
+-->
+
+---
+
+# ⏱ Zooming into `arith::AddIOp`: the typed lens
+
+```text
+┌────────────────────────────────────────────────────────────────┐
+│                            OpState                             │
+├────────────────────────────────────────────────────────────────┤
+│ Operation *state                                               │
+└────────────────────────────────△───────────────────────────────┘
+                                 │
+┌────────────────────────────────────────────────────────────────┐
+│ Op<AddIOp, ZeroRegions, OneResult, NOperands<2>, ...20 traits> │
+└────────────────────────────────△───────────────────────────────┘
+                                 │
+                            ┌────────┐
+                            │ AddIOp │
+                            └────────┘
+```
+
+- `getLhs()` → `Value`, literally `getOperation()->getOperand(0)`
+- `getLhsMutable()` → `OpOperand&`, literally `getOperation()->getOpOperand(0)`
+- `getResult()` → `Value`, literally `getOperation()->getResult(0)`
+- `->` is overloaded too: `addOp->erase()` means `addOp.getOperation()->erase()`
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; if skipped, say: AddIOp is Op<AddIOp, ~20 trait mixins> is OpState — the only real field in the whole chain is OpState's Operation *state; every trait mixin (ZeroRegions, OneResult, NOperands<2>, IsCommutative, ...) is an empty CRTP base adding methods only, never fields. sizeof(AddIOp) == sizeof(Operation*).
+This is the payoff for the "Two views of one op: generic vs. generated" slide from earlier — now with the real generated code instead of a description. getLhs() goes through getODSOperands(0), which is just std::next(getOperation()->operand_begin(), 0) — i.e. op->getOperand(0) with the index baked in at compile time from the ODS argument's position. No name lookup at runtime, ever.
+getLhsMutable() returns an OpOperand&, not a Value — direct callback to the OpOperand deep-dive slide: this is literally the same edge type, letting you rewire just this one operand slot without touching the others.
+Simplification for the slide: the real generated code wraps the return of getLhs()/getResult() in cast<TypedValue<Type>>(...) — a thin Value subclass asserting a known type. Saying "returns a Value" is accurate enough here; mention TypedValue only if asked.
+~2 min.
+-->
+
+---
+
+# ⏱ Zooming into `Region`: it's almost nothing
+
+`Region`'s entire field list — this is why "embedded, not a pointer" is so cheap:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                    Region                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ BlockListType blocks;   -- doubly-linked: head/tail ptr to first/last Block │
+│ Operation *container;   -- back-pointer to the owning Operation             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+Two fields, zero allocation of its own. Only the `Block`s that `blocks` points at are separately heap-allocated (`new Block`) — the recursion starts there, on the next slide.
+
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; if skipped, say: Region is just two fields (a Block list header + a back-pointer) embedded inside its owning Operation — no allocation of its own; Block is where the "separate allocation" starts, and the next slide recurses from there.
+Precision for Q&A: BlockListType is llvm::iplist<Block>, which technically holds ONE embedded Sentinel node with Prev/Next pointers (not two separate head/tail fields) — but "acts like a head+tail pointer pair" is the right intuition and all that's needed here. The same trick appears one level down for Block's own op list (next slide).
+Intrusive vs. std::list, one sentence if asked: std::list<Block> would allocate a wrapper node per element; iplist<Block> instead makes Block itself carry Prev/Next (via ilist_node_with_parent) — no wrapper, no extra allocation, that's the whole point of "intrusive".
+container is only used going "up" (getParentOp()); walking "down" always goes through blocks — front()/back()/getBlocks().
+This is a good moment to physically point back at the scf.for slide's diagram and trace: Operation (1 alloc) → Region (embedded, free) → Block (new Block, 1 alloc per block) → Operation (recursion, 1 alloc per nested op).
+(+1 if presented.)
+-->
+
+---
+
+# ⏱ Zooming into `Block`
+
+`Block` has two base classes (multiple inheritance) plus its own fields:
+
+```text
+┌───────────────────────────────────┐    ┌───────────────────────────────────────┐
+│ IRObjectWithUseList<BlockOperand> │    │ ilist_node_with_parent<Block, Region> │
+├───────────────────────────────────┤    ├───────────────────────────────────────┤
+│ IROperandBase *firstUse           │    │ NodeBase *Prev, *Next                 │
+└─────────────────△─────────────────┘    └───────────────────△───────────────────┘
+                  │                                          │
+                  └────────────────────┬─────────────────────┘
+                                       │
+           ┌───────────────────────────────────────────────────────┐
+           │                         Block                         │
+           ├───────────────────────────────────────────────────────┤
+           │ PointerIntPair<Region*,1,bool> parentValidOpOrderPair │
+           │ OpListType operations                                 │
+           │ std::vector<BlockArgument> arguments                  │
+           └───────────────────────────────────────────────────────┘
+```
+
+- **`Prev`/`Next`** — inherited; a doubly-linked list
+- **`firstUse`** — inherited; chains through *other* ops' successor edges (who branches to me)
+- **`operations`** — same doubly-linked head/tail trick as `Region::blocks`
+
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; if skipped, say: Block is where "everything's embedded" finally breaks — operations is an embedded Sentinel just like Region::blocks, but arguments is a genuine std::vector with its own heap buffer, and each BlockArgument points at a separately new'd BlockArgumentImpl.
+Precision for Q&A: each BlockArgument is a 1-pointer handle (like OpResult) to its own separately-`new`'d BlockArgumentImpl { Type, Block *owner, index, Location } — Value.h ~L280 for the struct, Value::create ~L327 for the `new detail::BlockArgumentImpl(...)` call. IRObjectWithUseList lives in UseDefLists.h.
+firstUse ties back to the "Use-def chains" slide's OpOperand/use-list story — it's the SAME mechanism, just for Block-as-branch-target instead of Value-as-data. Concretely: cf.br's successor list is a BlockOperand[] trailing the cf.br Operation (see the Operation box); Block.firstUse is the head of the chain through all such edges pointing at this block.
+Why does arguments get to be a plain std::vector instead of something fancier? Block arguments are rarely hot-path-critical the way operands/results are (they don't need O(1) index arithmetic from a stable Operation* the way OpResult does) — a std::vector is simplest and good enough.
+Full recursion recap, all three slides: Operation (1 alloc, results prefix + operands/regions/successors trailing) → Region (embedded, free) → Block (1 alloc, operations embedded, arguments a real vector of separately-allocated BlockArgumentImpls) → Operation (recursion).
+(+1 if presented.)
+-->
+
+---
+
+# 🧠 Quiz (1/7): how fast is the i-th `OpResult`?
+
+
+What's the complexity of `op->getResult(i)`?
+
+<!-- Speaker notes:
+Give ~30 seconds per case; same format as the "small edits" quiz — no separate answer slide beyond this pair. The pattern to land across all seven: arrays give O(1) random access; the intrusive doubly-linked lists don't — but those same linked lists make insert/erase O(1) once you already have a position, which plain arrays can't do. Two sides of the same tradeoff.
+~30 s.
+-->
+
+---
+
+# ✅ O(1)
+
+`op->getResult(i)` is **O(1)**.
+
+Results are a **PREFIX array** (`OpResultImpl[numResults]`) — direct arithmetic (inline vs. out-of-line branch on a constant threshold), never a scan.
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (2/7): how fast is the i-th `Region`?
+
+What's the complexity of `op->getRegion(i)`?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ O(1)
+
+`op->getRegion(i)` is **O(1)**.
+
+Regions are a **TRAILING array** (`MutableArrayRef<Region>`) — `op->getRegions()[i]`, plain indexing.
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (3/7): how fast is inserting an op into a `Block`?
+
+What's the complexity of inserting an operation into a block at a given location, e.g. `op->moveBefore(anotherOp)`?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ O(1)
+
+`op->moveBefore(anotherOp)` is **O(1)**.
+
+`Block::operations` is `llvm::iplist<Operation>`, a **doubly-linked list**. Insertion into a linked list is O(1).
+
+<!-- Speaker notes:
+Contrast with std::vector::insert, which is O(n) because of the shift. This is exactly why the IR uses an intrusive linked list instead of an array here.
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (4/7): how fast is erasing an op from a `Block`?
+
+What's the complexity of `op->erase()`?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ O(1)
+
+`op->erase()` is **O(1)** for ops without nested IR.
+
+Same reasoning as insert: removing a node from a doubly-linked list is a constant number of pointer updates.
+
+However, `op->erase()` must also erase all nested blocks, block arguments, operations.
+
+<!-- Speaker notes:
+Caveat if asked: erase() also destroys the op, which recursively destroys its nested regions/operands — that part is O(size of the erased subtree), not O(1). The O(1) claim is specifically about unlinking from the parent Block.
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (5/7): how fast is the i-th `Attribute`?
+
+What's the complexity of getting **the i-th `Attribute`**?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ Depends what "i-th" means
+
+**Positionally**, `op->getAttrs()[i]` is **O(1)** — `DictionaryAttr`'s storage is a contiguous, name-**sorted** `ArrayRef<NamedAttribute>`, so raw indexing is plain array access.
+
+But nobody asks for "the i-th attribute" in real code — the real operation is lookup **by name**:
+
+```cpp
+op->getAttr("answer")            // O(log n) — binary search over the sorted array
+op->getAttrOfType<T>("answer")   // same, + a cast
+```
+
+That's **O(log n)**, not O(1) like a hash map — `DictionaryAttr` is a sorted array, not a hash table.
+
+<!-- Speaker notes:
+The trick: "i-th" and "by name" are different questions with different answers. Binary search is impl::findAttrSorted, used by DictionaryAttr::get(StringRef)/getNamed(...).
+~45 s.
+-->
+
+---
+
+# 🧠 Quiz (6/7): how fast is the i-th `Block` of a `Region`?
+
+ What's the complexity of getting **the i-th `Block`** of one of its regions?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ O(n)
+
+Getting the i-th `Block` of a `Region` is **O(n)**.
+
+`Region::blocks` is `llvm::iplist<Block>`, a **doubly-linked list**: no random access, you must walk from the head.
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# 🧠 Quiz (7/7): how fast is the i-th `Operation*` in a `Block`?
+
+What's the complexity of getting **the i-th `Operation*`** in one of its blocks?
+
+<!-- Speaker notes:
+~30 s.
+-->
+
+---
+
+# ✅ O(n)
+
+`Block::operations` is `llvm::iplist<Operation>`, a doubly-linked list.
+
+**Note:** Accessing blocks / operations by index is extremely rare — as cases 3 and 4 showed, the IR data structures are optimized instead for splicing anywhere: `insert`, `erase`, `moveBefore` are all O(1).
+
+<!-- Speaker notes:
+Closing note for the whole 7-part quiz — land this explicitly if nothing else. Ties directly to the "Modification" cheat-sheet table, which is full of exactly these splice-anywhere operations.
+~45 s.
+-->
+
+---
+
+# ⏱ Zooming into `OpOperand` & `BlockOperand`
+
+Both are edges, and both derive from the same base class:
+
+```text
+     ┌────────────────────────┐
+     │     IROperandBase      │
+     ├────────────────────────┤
+     │ Operation *const owner │
+     │ IROperandBase *nextUse │
+     │ IROperandBase *back    │
+     └────────────△───────────┘
+       ┌──────────┴──────────┐
+       │                     │
+┌─────────────┐      ┌──────────────┐
+│  OpOperand  │      │ BlockOperand │
+├─────────────┤      ├──────────────┤
+│ Value value │      │ Block *value │
+└─────────────┘      └──────────────┘
+```
+
+- **`OpOperand`** — chains into the *value*'s use-list (its `firstUse`).
+- **`BlockOperand`** — chains into the *target block*'s use-list (`firstUse`, from the previous slide).
+
+<sub>mlir/include/mlir/IR/UseDefLists.h; Value.h (`OpOperand`); BlockSupport.h (`BlockOperand`)</sub>
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; if skipped, say: OpOperand and BlockOperand both derive from IROperandBase (owner, nextUse, back) and each add exactly one field, `value` — one edge is "a Value I use", the other is "a Block I branch to" — and neither is separately allocated, they're just array elements trailing their owner Operation.
+Simplification, flag if asked: `back` is drawn here as `IROperandBase *`, i.e. "the previous edge", for a clean doubly-linked-list mental model. The real field is `IROperandBase **back` — a pointer to the SLOT that currently points at this node (either the previous edge's `nextUse`, or the owning value/block's `firstUse`). That's what makes unlinking branch-free (head-of-list and middle-of-list removal are the exact same code) — the simplified "plain prev pointer" model would need an if-is-first-node special case instead. Good depth to have ready, not worth putting on the slide.
+Also simplified: OpOperand/BlockOperand don't directly extend IROperandBase — there's a CRTP template layer in between, `IROperand<DerivedT, IRValueT>` (DerivedT=OpOperand/BlockOperand, IRValueT=Value/Block*), which is where `value` actually lives. Collapsed away here since it adds a name without adding a concept.
+This slide is the payoff for three earlier promises: (1) the "Use-def chains" slide said "a use is an OpOperand — an edge that knows both endpoints" without showing fields, this is those fields; (2) the Operation memory-layout slide's OpOperand[]/BlockOperand[] rows, now explained; (3) the Block slide's firstUse row, now explained from the other end (BlockOperand's value points AT the Block, and getUseList chains into that Block's firstUse).
+owner vs. value, the constant confusion point: owner = "whose operand list am I in" (e.g. the cf.br); value = "what am I pointing AT" (the Value being read, or the Block being branched to). getUsers()/getUses() on a Value walk the chain of OpOperands whose VALUE is that Value, across potentially many different OWNERS.
+back is technically a pointer-to-pointer (IROperandBase**), not a direct "previous node" pointer — it points at whatever SLOT currently references this node (either another operand's nextUse, or the use-list head firstUse). That's what lets removeFromCurrent() unlink in O(1) without walking the list. "Doubly-linked list" is the right level of intuition for the slide; this is the precise mechanism if asked.
+No stored index either: getOperandNumber() isn't a field, it's pointer arithmetic (this - &owner->getOpOperands()[0]) — only works because the OpOperand array is contiguous and trailing (payoff from the memory-layout slide).
+Neither OpOperand nor BlockOperand is separately heap-allocated — both are plain array elements trailing their owner Operation's single allocation.
+(+1 if presented.)
+-->
+
+---
+
+# `Value`: exactly two forms
+
+```text
+┌────────────────────────────────┐          ┌─────────────────┐
+│ IRObjectWithUseList<OpOperand> │          │      Value      │
+├────────────────────────────────┤          ├─────────────────┤
+│ IROperandBase *firstUse        │          │ ValueImpl *impl │
+└────────────────△───────────────┘          └─────────────────┘
+                 │                                   │
+                 │                                   ▼
+┌─────────────────────────────────────────────────────────────┐
+│                          ValueImpl                          │
+├─────────────────────────────────────────────────────────────┤
+│ PointerIntPair<Type,3,Kind> typeAndKind                     │
+└──────────────────────────────△──────────────────────────────┘
+                               │
+                  ┌────────────┴──────────┐
+                  │                       │
+          ┌──────────────┐      ┌───────────────────┐
+          │ OpResultImpl │      │ BlockArgumentImpl │
+          └──────────────┘      ├───────────────────┤
+                                │ Block *owner      │
+                                │ int64_t index     │
+                                │ Location loc      │
+                                └───────────────────┘
+```
+
+<sub>mlir/include/mlir/IR/Value.h:40-84 (`ValueImpl`), 278-302 (`BlockArgumentImpl`), 353-380 (`OpResultImpl`), 454 (`OpResult`)</sub>
+
+<!-- Speaker notes:
+Answers two things students ask once they've seen the Operation memory-layout slides: "where's Value's superclass?" (nowhere — it's a bare handle, unlike Operation which is always heap+pointer) and "where's the uses-list pointer?" (on ValueImpl, inherited from IRObjectWithUseList<OpOperand> — same base class OpOperand's owner-side pointer chains into, from the earlier deep-dive).
+OpResultImpl has zero extra fields of its own (box closes immediately) — result number comes from Kind for InlineOpResult, or a trailing outOfLineIndex field for OutOfLineOpResult (not shown here, that's the "what's really in memory" flex slide's territory). BlockArgumentImpl earns its 3 fields because block arguments need an explicit owner/index/loc that OpResult gets for free from its position in the trailing OpResultImpl array.
+Don't dwell on OpResult/BlockArgument (the handle classes) here — one bullet is enough; they add no fields, so there's nothing to draw.
+~2 min.
+-->
+
+---
+
+# 🧠 Quiz: rewriting `x + x` into `x * 2`
+
+Goal: rewrite `%r = arith.addi %x, %x` (same operand twice) into `%r = arith.muli %x, 2`. Find the bug(s):
+
+```cpp
+arith::AddIOp addOp = ...;
+if (&addOp.getLhs() == &addOp.getRhs()) {
+  OpBuilder b(addOp);
+  Value two = arith::ConstantOp::create(
+      b, addOp.getLoc(), b.getIntegerAttr(addOp.getLhs().getType(), 2));
+  arith::MulIOp mulOp = arith::MulIOp::create(
+      b, addOp.getLoc(), addOp.getLhs(), two);
+  addOp->replaceAllUsesWith(mulOp->getResults());
+  addOp->erase();
+}
+```
+
+<!-- Speaker notes:
+Give ~60-90 seconds, no separate answer slide. This is the original snippet a student submitted — every OTHER bug already got fixed for this quiz (there were several: undefined `b`, `ConstantOp::create` called with a `Type` and a raw `int` instead of `Location`+`Attribute`, an undefined `lhs` variable, `MulIOp::create` missing its `Location`, and — the sneaky one — erasing `mulOp` (the op we just made everyone use!) instead of `addOp` (the now-dead one)). Only the `if` condition is untouched; that's the whole quiz.
+Answer: `&addOp.getLhs() == &addOp.getRhs()` **does not compile.** getLhs()/getRhs() return `Value` (well, `TypedValue<Type>`, still a Value) BY VALUE — a prvalue/temporary. You cannot apply the built-in unary `&` to a non-lvalue; `Value` doesn't overload `operator&` to accept one either. This is the same class of error as `int f(); &f();` — a hard compile error ("cannot take the address of an rvalue"), not a subtle runtime bug.
+The fix (don't show it as "the answer" until asked — let them get there): drop the `&`s. `if (addOp.getLhs() == addOp.getRhs())` — Value::operator==(const Value&) (Value.h:101) is `impl == other.impl`, exactly the pointer-identity check "is this the same SSA value" that's wanted. This is the direct payoff of this slide's own bullet: Value is compared with ==, not &==&.
+If someone protests "but what if it DID compile" — worth one sentence: even hypothetically, comparing addresses of two temporaries that are both alive in the same expression would be comparing two DIFFERENT stack slots (the compiler must materialize both to evaluate the ==), so it would be unconditionally false regardless of whether addOp.getLhs() and addOp.getRhs() are the same Value — doubly wrong, not just "wrong sometimes." But the real headline is simpler: it doesn't compile at all.
+~2 min.
+-->
+
+---
+
+# Handle discipline, the full picture
+
+| Construct | Pass as |
+|---|---|
+| `Operation` | `Operation*` / `Operation&` |
+| concrete op (`AddIOp`, ...) | **by value** |
+| `Block` | `Block*` / `Block&` |
+| `Region` | `Region*` / `Region&` |
+| `Value` (`OpResult`/`BlockArgument`) | **by value** |
+| `OpOperand` / `BlockOperand` | `OpOperand&` / `BlockOperand&` |
+| `Attribute`, `Type`, `Location` | **by value** |
+
+<!-- Speaker notes:
+Your draft had operation/block/region/OpOperand-BlockOperand/Value/Attribute right; one addition:
+`Type` and `Location` belong on the "by value" list too, same pattern as Attribute: both wrap exactly one interned pointer (Location literally wraps a LocationAttr, itself an Attribute), both copyable, both compared with plain pointer-equality on that one field. Anything of this shape (Value, Attribute, Type, Location, OperationName) is "cheap handle into the MLIRContext's uniquing tables" — one category, not four separate ones.
+Also worth knowing (concrete ops): AddIOp etc. DO define == — a free function `operator==(OpState lhs, OpState rhs)` taking both by value and comparing `lhs.getOperation() == rhs.getOperation()`, so == on two typed ops means exactly what == on the underlying Operation* means.
+Non-copyability isn't unique to OpOperand/BlockOperand — it's the general reason anything ends up in the pointer/reference row: Block explicitly deletes its copy ctor/assignment (Block.h), IROperandBase does the same for OpOperand/BlockOperand (UseDefLists.h:74-75), and Operation's constructor is private (only Operation::create can make one) — Region inherits non-copyability transitively via its owned Block list. The pattern: pointer/reference means "this holds real, non-trivial owned state that must never be copied"; by-value means "this is a cheap handle, copying it is free and safe."
+One nuance if asked: OpOperand's own operator== ("this == &other") checks "is this literally the same slot/edge", a different question from "do these two edges point at the same Value" (that's `a.get() == b.get()`) — same family of mistake as the quiz two slides ago, just for OpOperand instead of Value.
+~2 min.
+-->
+
+---
+
+# Using a `Value`: `getOwner()`, `getDefiningOp()`
 
 - `OpResult` → `getOwner()` returns the defining `Operation*`, `getResultNumber()`
 - `BlockArgument` → `getOwner()` returns the `Block*`, `getArgNumber()`
@@ -274,10 +1028,81 @@ void inspect(Operation *op) {
 
 <!-- Speaker notes:
 Two gotchas to say out loud:
-1. isa/dyn_cast on a possibly-NULL Operation* asserts — that's what dyn_cast_or_null / isa_and_nonnull are for. Classic combo with getDefiningOp: val.getDefiningOp<arith::ConstantOp>() does the null-safe dyn_cast in one step.
+1. isa/dyn_cast on a NULL Operation* crashes (for op casts it's a plain null dereference — MLIR's cast machinery bypasses LLVM's null assert); dyn_cast_or_null / isa_and_nonnull are the null-tolerant forms. Don't elaborate further — the flex quiz right after this slide delivers this gotcha as a spot-the-crash with a real upstream commit. If you're SKIPPING that quiz, say the punchline now: getDefiningOp returns null for block arguments, and val.getDefiningOp<OpTy>() folds the null check in.
 2. op->getName() returns an OperationName object, not a string. Streaming it works; comparing needs getName().getStringRef() — but if you're comparing op names as strings, you almost always want isa<> instead.
 The inspect() snippet is verified to compile against this checkout.
 ~2 min. Core-path check: leaving this slide you should be ~9 min into the lecture (≈0:14 on the session clock).
+-->
+
+---
+
+# 🧠 Quiz: this helper shipped upstream ⏱
+
+Condensed from a real conversion pass — this ran in production:
+
+```cpp
+/// Returns true iff the extension op is fed by a vector.transfer_read.
+static bool isFedByTransferRead(arith::ExtUIOp extOp) {
+  return isa<vector::TransferReadOp>(extOp.getOperand().getDefiningOp());
+}
+```
+
+All of the pass's tests passed. Then a user's kernel contained this:
+
+```mlir
+func.func @f(%v: vector<4xi8>) -> vector<4xi32> {
+  %0 = arith.extui %v : vector<4xi8> to vector<4xi32>
+  return %0 : vector<4xi32>
+}
+```
+
+*(`vector.transfer_read` = a vector load — its details don't matter here.)*
+
+What does the helper do for `%0`'s op?
+
+① returns `false` — no `transfer_read` anywhere &nbsp;&nbsp; ② returns `true`
+③ crash / segfault &nbsp;&nbsp; ④ verifier error after the pass
+
+<sub>pre-fix code of mlir/lib/Conversion/VectorToGPU/VectorToGPU.cpp (condensed); the fix is quoted on the next slide</sub>
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip together with the answers slide that follows); if skipped, say: isa/dyn_cast on getDefiningOp() crashes on block arguments — always reach for the null-safe templated v.getDefiningOp<OpTy>(); this exact crash shipped upstream and keeps being re-fixed across dialects.
+Give ~60 seconds, vote by show of hands. ④ is for students who think the verifier catches everything; ① for those who missed that getDefiningOp can return null.
+Answer: ③. %v is a BlockArgument, so getDefiningOp() returns nullptr (the fine print from the Value slide) — and isa<> on a null Operation* is a plain null dereference: segfault, in EVERY build type. Careful with the mechanism: LLVM's famous "isa<> used on a null pointer" assert does NOT fire here — MLIR's CastInfo<T, Operation*> specialization (mlir/include/mlir/IR/Operation.h:1187-1191) calls OpTy::classof(op) directly and bypasses it; the crash lands in Op::classof → getRegisteredInfo dereferencing null (verified by compiling the buggy helper against this tree: a raw null read inside Operation::getName, no assert; the upstream issue #107967 stack trace is likewise a raw SIGSEGV).
+Framing fine print: in the real pass this helper only ran on extension ops found in a vector.contract's backward slice, so the 3-line function alone wouldn't reach it — hence "a user's kernel contained this", not "ran the pass on this file". The quiz question asks what the HELPER does for %0's op, which is exact.
+Provenance (verified in this checkout's history): commit 927559d27d5b "[mlir][vector] Fix a crash in VectorToGPU (#113454)" removed exactly this isa<...>(getDefiningOp()) call; the commit message notes the operand "cannot be retrieved using getDefiningOp" when it is a function argument (issue #107967). The same class keeps being re-fixed independently: f6a756f35a4d (#108703, linalg isContractionBody segfault), 96aef1a11382 (#195150, linalg FoldAddIntoDest) — arguably the most re-fixed crash in MLIR pattern code.
+Why tests never caught it: every test fed the extui from another op. Values without defining ops (function args, loop iter_args) only appear in fuller IR — the first such input in the wild took the compiler down.
+(+2 if presented.)
+-->
+
+---
+
+# ✅ It crashes (③) — the null nobody tested ⏱
+
+- `%v` is a **block argument** — `getDefiningOp()` returns **`nullptr`** (that fine print again).
+- `isa<>` on a null `Operation*` dereferences it: **segfault — in every build type.** (MLIR's op-cast machinery calls `classof` directly, *bypassing* LLVM's famous `"isa<> used on a null pointer"` assert. Not even an assertions build saves you.)
+- Every test fed the `extui` from another op; the first **function argument** in the wild took the whole compiler down.
+
+The real fix is one line — the templated form folds in the null check (`dyn_cast_or_null` under the hood):
+
+```cpp
+static bool isFedByTransferRead(arith::ExtUIOp extOp) {
+  // Typed + null-safe in one call:
+  auto read = extOp.getOperand().getDefiningOp<vector::TransferReadOp>();
+  return read != nullptr;  // null: block argument OR a different producer
+}
+```
+
+Values with no defining op are everywhere: **function arguments, `scf.for` induction variables, `iter_args`**. Every backward step through a use-def chain must survive them.
+
+<sub>fix: mlir/lib/Conversion/VectorToGPU/VectorToGPU.cpp (#113454); templated overload: mlir/include/mlir/IR/Value.h:124-127; op-cast null bypass: mlir/include/mlir/IR/Operation.h:1187</sub>
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; paired with the quiz slide before it — skip or present the pair together.
+Reinforce the idiom hierarchy: (1) v.getDefiningOp<OpTy>() when you want a specific op type — null-safe, one call; (2) plain getDefiningOp() + explicit null check when you need the generic Operation*; (3) isa_and_nonnull<T>(v.getDefiningOp()) when you only need the bool.
+Callback: "Switching lenses" gotcha #1 warned about null op pointers — this is that gotcha with a commit hash attached.
+Exercise tie-in: checkpoint 3 of Exercise 1 is exactly this kind of robustness. Their matchPattern-based solution is naturally safe (matchPattern handles block arguments); hand-rolled getDefiningOp chains are where this bites.
+(+1 if presented.)
 -->
 
 ---
@@ -1047,6 +1872,101 @@ Verifier framing: it's a safety net you'll be grateful for during the exercise �
 Live proof if asked (real, verified): mlir-opt in.mlir --pass-pipeline='builtin.module(func.func(test-pass-create-invalid-ir))' → "error: 'test.any_attr_of_i32_str' op requires attribute 'attr'" — the verifier fires between passes; the message names the op, and the IR-printing flags reveal the guilty pass.
 Note the distinction: erase()-with-uses crashes IMMEDIATELY inside your pass (destructor assertion from earlier), it doesn't wait for the verifier.
 (+2 if presented.)
+-->
+
+---
+
+# 🧠 Quiz: the cursor was somewhere else ⏱
+
+A colleague "simplifies" the worked example: *"I create the new ops at the end of the block — that spot always exists."* RAUW and erase are in the correct order!
+
+<div class="columns">
+<div>
+
+```cpp
+getOperation()->walk([&](arith::MulIOp op) {
+  APInt c;
+  if (!matchPattern(op.getRhs(),
+                    m_ConstantInt(&c)) ||
+      !c.isPowerOf2())
+    return;
+  OpBuilder b(
+      op->getBlock()->getTerminator());
+  Value shift = arith::ConstantOp::create(
+      b, op.getLoc(),
+      b.getIntegerAttr(op.getType(),
+                       c.logBase2()));
+  Value shl = arith::ShLIOp::create(
+      b, op.getLoc(), op.getLhs(), shift);
+  op->replaceAllUsesWith(ValueRange{shl});
+  op->erase();
+});
+```
+
+</div>
+<div>
+
+```mlir
+func.func @f(%x: i32) -> i32 {
+  %c8 = arith.constant 8 : i32
+  %r = arith.muli %x, %c8 : i32
+  %s = arith.addi %r, %x : i32
+  return %s : i32
+}
+```
+
+The pass body runs without crashing.
+What does `mlir-opt` report?
+
+① nothing — clean output
+② `operation destroyed but still has uses`
+③ `operand #0 does not dominate this use`
+④ the new `shli` is trivially dead and vanishes
+
+</div>
+</div>
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule (skip together with the answers slide that follows); if skipped, say: RAUW also rewires uses ABOVE your insertion point — create replacement ops right before the op you're replacing (OpBuilder b(op)), or the after-pass verifier greets you with "operand does not dominate this use".
+Give ~60-90 seconds. Most students pick ① — the RAUW/erase order is correct (deliberately granted by this quiz), so it "looks fixed". ② is reflex from the earlier spot-the-bug.
+Answer: ③. The addi %s is a user of %r that sits ABOVE the terminator-anchored cursor; after RAUW it uses a value defined below itself. The pass itself runs fine — the after-pass verifier (the "Failing, and staying honest" slide: "broken dominance") rejects the result and points at an op the pass never touched.
+④ is a good discussion distractor: the shli is NOT dead (%s uses it) — and nothing would delete it anyway; DCE never runs in a bare pass (Session 3).
+Error text verified on this tree (minimal use-before-def repro through mlir-opt): "error: operand #0 does not dominate this use" + "note: operand defined here (op in the same block)" — emitted from the dominance check in mlir/lib/IR/Verifier.cpp.
+Real upstream twin (verified in history): commit 77ba6918a14d "[mlir][linalg] Fix FoldReshapeWithGenericOpByCollapsing insertion point (#133476)" — replacement built at the consumer, an extra user sat between producer and consumer; the fix is one setInsertionPointAfter(producer) with the comment "there could be uses of `producer` between it and the `tensor.collapse_shape` op".
+(+2 if presented.)
+-->
+
+---
+
+# ✅ The verifier catches it (③) — dominance ⏱
+
+The block after the rewrite, before verification — reading it top-down shows the bug:
+
+```mlir
+func.func @f(%x: i32) -> i32 {
+  %c8 = arith.constant 8 : i32
+  %s = arith.addi %0, %x : i32      // ← now uses %0 … which is defined below!
+  %c3 = arith.constant 3 : i32
+  %0 = arith.shli %x, %c3 : i32     // ← created "at the end of the block"
+  return %s : i32
+}
+```
+
+```text
+error: operand #0 does not dominate this use
+note: operand defined here (op in the same block)
+```
+
+- `replaceAllUsesWith` rewires **every** use — including `%s`, **above** the cursor. Creating the ops "worked"; the SSA graph is broken anyway.
+- Your pass completes normally; the **after-pass verifier** — it runs after *every* pass — rejects the IR and names an op you never touched. (That's the "broken dominance" case from *Failing, and staying honest*, made concrete.)
+- **Rule: choose the insertion point from where the users are — not where it's convenient.** For a 1:1 replacement, `OpBuilder b(op)` — right before the op being replaced — dominates every existing use *by construction*. That's why the worked example does exactly that.
+
+<!-- Speaker notes:
+FLEX SLIDE — skip if behind schedule; paired with the quiz slide before it — skip or present the pair together.
+Walk the printed IR top-down and let the room spot %0 being used before defined — the visual is the lesson.
+Generalize the rule: replacements go before the old op; ops consuming a producer's result go AFTER the producer (setInsertionPointAfter). When a helper moves a borrowed builder, InsertionGuard (earlier ⏱ slide) restores the cursor.
+If someone asks "why doesn't create() just refuse?": OpBuilder has no global view — inserting forward references is legal MID-mutation (you might fix them up next); only the finished IR must satisfy dominance, hence the verifier owns this check.
+(+1 if presented.)
 -->
 
 ---
