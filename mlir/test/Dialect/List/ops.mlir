@@ -36,6 +36,16 @@ func.func @push_pop_peek(%li: !list.list<i32>, %item: i32)
   return %shorter, %back : !list.list<i32>, i32
 }
 
+// CHECK-LABEL: @peek_pop_front
+// CHECK-SAME: %[[LI:.*]]: !list.list<i32>
+func.func @peek_pop_front(%li: !list.list<i32>) -> (!list.list<i32>, i32) {
+  // CHECK: %[[FRONT:.*]] = list.peek_front %[[LI]] : !list.list<i32> -> i32
+  %front = list.peek_front %li : !list.list<i32> -> i32
+  // CHECK: %[[SHORTER:.*]] = list.pop_front %[[LI]] : !list.list<i32>
+  %shorter = list.pop_front %li : !list.list<i32>
+  return %shorter, %front : !list.list<i32>, i32
+}
+
 // CHECK-LABEL: @elements
 // CHECK-SAME: %[[A:.*]]: i32, %[[B:.*]]: i32, %[[C:.*]]: i32
 func.func @elements(%a: i32, %b: i32, %c: i32) -> (i32, i32, i32) {

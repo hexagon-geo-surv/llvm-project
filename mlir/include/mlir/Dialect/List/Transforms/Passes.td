@@ -45,4 +45,38 @@ def ListSimplifyElements : Pass<"list-simplify-elements"> {
   let dependentDialects = ["list::ListDialect"];
 }
 
+def ListLowerMap : Pass<"list-lower-map"> {
+  let summary = "Lower list.map operations to scf.while loops";
+  let description = [{
+    Replaces every `list.map` operation with an `scf.while` loop that carries two
+    lists: the elements that still have to be mapped and the mapped elements
+    collected so far. Every iteration takes the first element that is left,
+    applies the body of the `list.map` to it and appends the mapped element to
+    the back of the result list. The loop stops once no element is left, at which
+    point the second loop-carried list holds the result of the `list.map`.
+  }];
+
+  let dependentDialects = [
+    "arith::ArithDialect",
+    "list::ListDialect",
+    "scf::SCFDialect"
+  ];
+}
+
+def ListLowerRange : Pass<"list-lower-range"> {
+  let summary = "Lower list.range operations to scf.for loops";
+  let description = [{
+    Replaces every `list.range` operation with an `scf.for` loop that iterates
+    over the integers of the range and appends them to a list that starts out
+    empty. The loop runs zero times for an empty range, so no special case is
+    needed for it.
+  }];
+
+  let dependentDialects = [
+    "arith::ArithDialect",
+    "list::ListDialect",
+    "scf::SCFDialect"
+  ];
+}
+
 #endif // MLIR_DIALECT_LIST_TRANSFORMS_PASSES_TD

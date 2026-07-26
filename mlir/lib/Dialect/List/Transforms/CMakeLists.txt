@@ -1,4 +1,6 @@
 add_mlir_dialect_library(MLIRListTransforms
+  ListLowerMap.cpp
+  ListLowerRange.cpp
   ListSimplify.cpp
   ListSimplifyElements.cpp
 
@@ -9,9 +11,11 @@ add_mlir_dialect_library(MLIRListTransforms
   MLIRListTransformsIncGen
 
   LINK_LIBS PUBLIC
+  MLIRArithDialect
   MLIRIR
   MLIRListDialect
   MLIRPass
+  MLIRSCFDialect
   MLIRSupport
   MLIRTransforms
   )

@@ -161,6 +161,34 @@ def List_PeekBackOp : List_Op<"peek_back",
   ];
 }
 
+def List_PeekFrontOp : List_Op<"peek_front",
+    [List_ItemTypeMatchesElementType<"input", "item">]> {
+  let summary = "first element of a list";
+  let description = [{
+    Returns the first element of the operand list. The behavior is undefined if
+    the list is empty.
+
+    Example:
+
+    ```mlir
+    %item = list.peek_front %li : !list.list<i32> -> i32
+    ```
+  }];
+
+  let arguments = (ins List_ListType:$input);
+  let results = (outs AnyInteger:$item);
+
+  let assemblyFormat =
+      "$input attr-dict `:` qualified(type($input)) `->` type($item)";
+
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$input), [{
+      build($_builder, $_state,
+            ::llvm::cast<ListType>(input.getType()).getElementType(), input);
+    }]>
+  ];
+}
+
 def List_PopBackOp : List_Op<"pop_back", [AllTypesMatch<["input", "result"]>]> {
   let summary = "list without its last element";
   let description = [{
@@ -171,6 +199,31 @@ def List_PopBackOp : List_Op<"pop_back", [AllTypesMatch<["input", "result"]>]> {
 
     ```mlir
     %shorter = list.pop_back %li : !list.list<i32>
+    ```
+  }];
+
+  let arguments = (ins List_ListType:$input);
+  let results = (outs List_ListType:$result);
+
+  let assemblyFormat = "$input attr-dict `:` qualified(type($input))";
+
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$input), [{
+      build($_builder, $_state, input.getType(), input);
+    }]>
+  ];
+}
+
+def List_PopFrontOp : List_Op<"pop_front", [AllTypesMatch<["input", "result"]>]> {
+  let summary = "list without its first element";
+  let description = [{
+    Returns the operand list without its first element. The behavior is
+    undefined if the list is empty.
+
+    Example:
+
+    ```mlir
+    %shorter = list.pop_front %li : !list.list<i32>
     ```
   }];
 
