@@ -19,6 +19,7 @@
 // CHECK-SAME: index
 // CHECK-SAME: irdl
 // CHECK-SAME: linalg
+// CHECK-SAME: list
 // CHECK-SAME: llvm
 // CHECK-SAME: math
 // CHECK-SAME: memref

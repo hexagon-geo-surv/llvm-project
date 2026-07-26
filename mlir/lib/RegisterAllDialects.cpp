@@ -50,6 +50,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/AllInterfaces.h"
 #include "mlir/Dialect/Linalg/Transforms/RuntimeOpVerification.h"
+#include "mlir/Dialect/List/IR/List.h"
 #include "mlir/Dialect/MLProgram/IR/MLProgram.h"
 #include "mlir/Dialect/MLProgram/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/MPI/IR/MPI.h"
@@ -129,6 +130,7 @@ void mlir::registerAllDialects(DialectRegistry &registry) {
                   index::IndexDialect,
                   irdl::IRDLDialect,
                   linalg::LinalgDialect,
+                  list::ListDialect,
                   LLVM::LLVMDialect,
                   math::MathDialect,
                   memref::MemRefDialect,
