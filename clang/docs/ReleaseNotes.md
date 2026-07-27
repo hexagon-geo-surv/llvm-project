@@ -144,7 +144,8 @@ features cannot lower the translation-unit ABI level;
 
 - Added `__builtin_convert_from_arbitrary_fp`, which converts an integer holding
   the bits of a narrow floating-point format such as `Float8E4M3FN` to a native
-  floating-point type.
+  floating-point type, and `__builtin_convert_to_arbitrary_fp`, which performs
+  the reverse conversion.
 
 ### New Compiler Flags
 

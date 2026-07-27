@@ -4748,6 +4748,26 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return RValue::get(Reduce);
   }
 
+  case Builtin::BI__builtin_convert_to_arbitrary_fp: {
+    Value *Src = EmitScalarExpr(E->getArg(0));
+    llvm::Type *DstTy = ConvertType(E->getType());
+
+    auto GetMDString = [&](unsigned ArgNo) {
+      StringRef Str =
+          cast<StringLiteral>(E->getArg(ArgNo)->IgnoreParenImpCasts())
+              ->getString();
+      return llvm::MetadataAsValue::get(
+          getLLVMContext(), llvm::MDString::get(getLLVMContext(), Str));
+    };
+
+    Function *F = CGM.getIntrinsic(Intrinsic::convert_to_arbitrary_fp,
+                                   {DstTy, Src->getType()});
+    Value *Saturate = Builder.getInt1(
+        E->getArg(3)->EvaluateKnownConstInt(getContext()).getBoolValue());
+    return RValue::get(
+        Builder.CreateCall(F, {Src, GetMDString(1), GetMDString(2), Saturate}));
+  }
+
   case Builtin::BI__builtin_matrix_transpose: {
     auto *MatrixTy = E->getArg(0)->getType()->castAs<ConstantMatrixType>();
     Value *MatValue = EmitScalarExpr(E->getArg(0));

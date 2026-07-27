@@ -2689,6 +2689,9 @@ public:
   /// format. Returns the literal, or null after diagnosing.
   const StringLiteral *CheckArbitraryFPFormatArg(Expr *E);
 
+  /// BuiltinConvertToArbitraryFP - Handle __builtin_convert_to_arbitrary_fp
+  bool BuiltinConvertToArbitraryFP(CallExpr *TheCall);
+
   static StringRef GetFormatStringTypeName(FormatStringType FST);
   static FormatStringType GetFormatStringType(StringRef FormatFlavor);
   static FormatStringType GetFormatStringType(const FormatAttr *Format);

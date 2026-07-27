@@ -3669,6 +3669,59 @@ by the backend.
 Query for this feature with
 `__has_builtin(__builtin_convert_from_arbitrary_fp)`.
 
+(langext-__builtin_convert_to_arbitrary_fp)=
+(langext-builtin-convert-to-arbitrary-fp)=
+
+### `__builtin_convert_to_arbitrary_fp`
+
+`__builtin_convert_to_arbitrary_fp` is the inverse of
+{ref}`__builtin_convert_from_arbitrary_fp <langext-builtin-convert-from-arbitrary-fp>`:
+it narrows a native floating-point value to one of the formats listed there and
+returns the encoded bits as an integer.
+
+**Syntax**:
+
+```c++
+__builtin_convert_to_arbitrary_fp(value, format, rounding_mode, saturate)
+```
+
+**Examples**:
+
+```c++
+typedef float float4 __attribute__((ext_vector_type(4)));
+typedef unsigned _BitInt(8) uint8_4 __attribute__((ext_vector_type(4)));
+
+float f; float4 vf;
+
+unsigned _BitInt(8) b =
+    __builtin_convert_to_arbitrary_fp(f, "Float8E4M3FN", "round.tonearest", 0);
+
+uint8_4 vb =
+    __builtin_convert_to_arbitrary_fp(vf, "Float8E5M2", "round.towardzero", 1);
+```
+
+**Description**:
+
+`value` is a floating-point value, or a vector of them. `format` must be a
+string literal naming one of the supported formats, and `rounding_mode` must be
+a string literal naming a rounding mode: `"round.tonearest"`,
+`"round.tonearestaway"`, `"round.towardzero"`, `"round.upward"` or
+`"round.downward"`. `saturate` must be an integer constant expression equal to
+`0` or `1`; when it is `1`, values outside the representable finite range are
+clamped instead of becoming infinity.
+
+The result is `unsigned _BitInt(N)`, where `N` is the width of `format`, or an
+`ext_vector_type` of that type with as many elements as `value`. Because Clang
+only permits `_BitInt` vector elements whose width is a power of two, vector
+`value` operands are rejected for the 6-bit formats.
+
+This builtin maps to the `llvm.convert.to.arbitrary.fp` intrinsic; see its
+description in the LLVM Language Reference for the exact conversion semantics.
+Not every target lowers every format yet; unsupported combinations are reported
+by the backend.
+
+Query for this feature with `__has_builtin(__builtin_convert_to_arbitrary_fp)`.
+
 ### `__builtin_bitreverse`
 
 - `__builtin_bitreverse8`

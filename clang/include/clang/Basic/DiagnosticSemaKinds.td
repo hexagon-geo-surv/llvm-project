@@ -11504,6 +11504,10 @@ def err_arbitrary_fp_non_int_type : Error<
 def err_arbitrary_fp_incompatible_vector : Error<
   "floating-point and integer arguments to %0 must have the same number of "
   "elements">;
+def err_arbitrary_fp_invalid_rounding_mode : Error<
+  "'%0' is not a supported rounding mode">;
+def err_arbitrary_fp_vector_unsupported_format : Error<
+  "vector arguments to %0 are not supported for format '%1'">;
 
 def err_first_argument_to_cwsc_not_call : Error<
   "first argument to __builtin_call_with_static_chain must be a non-member call expression">;

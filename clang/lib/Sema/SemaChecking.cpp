@@ -96,6 +96,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/IR/FPEnv.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ConvertUTF.h"
@@ -4048,6 +4049,11 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     break;
   }
 
+  case Builtin::BI__builtin_convert_to_arbitrary_fp:
+    if (BuiltinConvertToArbitraryFP(TheCall))
+      return ExprError();
+    break;
+
   case Builtin::BI__builtin_matrix_transpose:
     return BuiltinMatrixTranspose(TheCall, TheCallResult);
 
@@ -6729,6 +6735,70 @@ ExprResult Sema::ConvertFromArbitraryFPExpr(Expr *E, Expr *Format,
 
   return new (Context) clang::ConvertFromArbitraryFPExpr(
       E, Format, TInfo, DstTy, VK_PRValue, OK_Ordinary, BuiltinLoc, RParenLoc);
+}
+
+bool Sema::BuiltinConvertToArbitraryFP(CallExpr *TheCall) {
+  const char *BuiltinName = "__builtin_convert_to_arbitrary_fp";
+  if (checkArgCount(TheCall, 4))
+    return true;
+
+  ExprResult ValueArg = DefaultLvalueConversion(TheCall->getArg(0));
+  if (ValueArg.isInvalid())
+    return true;
+  TheCall->setArg(0, ValueArg.get());
+
+  const StringLiteral *FormatLiteral =
+      CheckArbitraryFPFormatArg(TheCall->getArg(1));
+  if (!FormatLiteral)
+    return true;
+  StringRef FormatName = FormatLiteral->getString();
+
+  const auto *RoundingLiteral =
+      dyn_cast<StringLiteral>(TheCall->getArg(2)->IgnoreParenImpCasts());
+  if (!RoundingLiteral || !RoundingLiteral->isOrdinary())
+    return Diag(TheCall->getArg(2)->getBeginLoc(),
+                diag::err_expr_not_string_literal)
+           << TheCall->getArg(2)->getSourceRange();
+
+  StringRef RoundingName = RoundingLiteral->getString();
+  std::optional<llvm::RoundingMode> RM = convertStrToRoundingMode(RoundingName);
+  if (!RM || *RM == llvm::RoundingMode::Dynamic)
+    return Diag(TheCall->getArg(2)->getBeginLoc(),
+                diag::err_arbitrary_fp_invalid_rounding_mode)
+           << RoundingName << TheCall->getArg(2)->getSourceRange();
+
+  if (BuiltinConstantArgRange(TheCall, 3, 0, 1))
+    return true;
+
+  QualType SrcTy = TheCall->getArg(0)->getType();
+  QualType SrcEltTy = SrcTy;
+  const auto *SrcVecTy = SrcTy->getAs<VectorType>();
+  if (SrcVecTy)
+    SrcEltTy = SrcVecTy->getElementType();
+
+  if (!SrcEltTy->isRealFloatingType())
+    return Diag(TheCall->getBeginLoc(), diag::err_arbitrary_fp_non_fp_type)
+           << "first" << BuiltinName;
+
+  if (!Context.getTargetInfo().hasBitIntType())
+    return Diag(TheCall->getBeginLoc(), diag::err_type_unsupported)
+           << "_BitInt";
+
+  unsigned FormatBits =
+      llvm::APFloatBase::getArbitraryFPFormatSizeInBits(FormatName);
+  QualType ResultTy = Context.getBitIntType(/*Unsigned=*/true, FormatBits);
+  if (SrcVecTy) {
+    // Clang only supports _BitInt vector elements whose width is a power of
+    // two, so the six-bit formats have no vector form.
+    if (!llvm::isPowerOf2_32(FormatBits))
+      return Diag(TheCall->getBeginLoc(),
+                  diag::err_arbitrary_fp_vector_unsupported_format)
+             << BuiltinName << FormatName;
+    ResultTy = Context.getExtVectorType(ResultTy, SrcVecTy->getNumElements());
+  }
+
+  TheCall->setType(ResultTy);
+  return false;
 }
 
 bool Sema::BuiltinPrefetch(CallExpr *TheCall) {
