@@ -119,6 +119,9 @@ jobs:
   attest-release-sources:
     name: Attest Release Sources
     runs-on: ubuntu-24.04
+    environment:
+      deployment: false
+      name: release
     if: github.event_name != 'pull_request'
     needs:
       - inputs
