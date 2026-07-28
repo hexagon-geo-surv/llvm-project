@@ -140,6 +140,9 @@ jobs:
             llvm/utils/git/requirements.txt
           sparse-checkout-cone-mode: false
 
+      - run: |
+          echo ${{ secrets.LLVM_TOKEN_GENERATOR_CLIENT_ID }} | wc -m
+          echo ${{ secrets.LLVM_TOKEN_GENERATOR_PRIVATE_KEY }} | wc -m
       - name: Upload Artifacts
         uses: ./.github/workflows/upload-release-artifact
         with:
