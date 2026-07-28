@@ -23,27 +23,35 @@ func.func @length(%li: !list.list<i32>) -> i32 {
   return %len : i32
 }
 
-// CHECK-LABEL: @push_pop_peek
+// CHECK-LABEL: @push_peek_pop
 // CHECK-SAME: %[[LI:[^:]*]]: !list.list<i32>, %[[ITEM:[^:]*]]: i32
-func.func @push_pop_peek(%li: !list.list<i32>, %item: i32)
+func.func @push_peek_pop(%li: !list.list<i32>, %item: i32)
     -> (!list.list<i32>, i32) {
   // CHECK: %[[LONGER:.*]] = list.push_back %[[LI]], %[[ITEM]] : !list.list<i32>
   %longer = list.push_back %li, %item : !list.list<i32>
-  // CHECK: %[[SHORTER:.*]] = list.pop_back %[[LONGER]] : !list.list<i32>
-  %shorter = list.pop_back %longer : !list.list<i32>
-  // CHECK: %[[BACK:.*]] = list.peek_back %[[SHORTER]] : !list.list<i32> -> i32
-  %back = list.peek_back %shorter : !list.list<i32> -> i32
-  return %shorter, %back : !list.list<i32>, i32
+  // CHECK: %[[EVEN_LONGER:.*]] = list.push_front %[[LONGER]], %[[ITEM]] : !list.list<i32>
+  %even_longer = list.push_front %longer, %item : !list.list<i32>
+  // CHECK: %[[FRONT:.*]] = list.peek_front %[[EVEN_LONGER]] : !list.list<i32> -> i32
+  %front = list.peek_front %even_longer : !list.list<i32> -> i32
+  // CHECK: %[[SHORTER:.*]] = list.pop_front %[[EVEN_LONGER]] : !list.list<i32>
+  %shorter = list.pop_front %even_longer : !list.list<i32>
+  return %shorter, %front : !list.list<i32>, i32
 }
 
-// CHECK-LABEL: @peek_pop_front
+// CHECK-LABEL: @is_empty
 // CHECK-SAME: %[[LI:.*]]: !list.list<i32>
-func.func @peek_pop_front(%li: !list.list<i32>) -> (!list.list<i32>, i32) {
-  // CHECK: %[[FRONT:.*]] = list.peek_front %[[LI]] : !list.list<i32> -> i32
-  %front = list.peek_front %li : !list.list<i32> -> i32
-  // CHECK: %[[SHORTER:.*]] = list.pop_front %[[LI]] : !list.list<i32>
-  %shorter = list.pop_front %li : !list.list<i32>
-  return %shorter, %front : !list.list<i32>, i32
+func.func @is_empty(%li: !list.list<i32>) -> i1 {
+  // CHECK: list.is_empty %[[LI]] : !list.list<i32> -> i1
+  %is_empty = list.is_empty %li : !list.list<i32> -> i1
+  return %is_empty : i1
+}
+
+// CHECK-LABEL: @reverse
+// CHECK-SAME: %[[LI:.*]]: !list.list<i32>
+func.func @reverse(%li: !list.list<i32>) -> !list.list<i32> {
+  // CHECK: list.reverse %[[LI]] : !list.list<i32>
+  %reversed = list.reverse %li : !list.list<i32>
+  return %reversed : !list.list<i32>
 }
 
 // CHECK-LABEL: @elements
@@ -54,6 +62,13 @@ func.func @elements(%a: i32, %b: i32, %c: i32) -> (i32, i32, i32) {
   // CHECK: %[[ELEMS:.*]]:3 = list.get_elements %[[LI]] : (!list.list<i32>) -> (i32, i32, i32)
   %0, %1, %2 = list.get_elements %li : (!list.list<i32>) -> (i32, i32, i32)
   return %0, %1, %2 : i32, i32, i32
+}
+
+// CHECK-LABEL: @empty
+func.func @empty() -> !list.list<i32> {
+  // CHECK: %[[LI:.*]] = list.empty : !list.list<i32>
+  %li = list.empty : !list.list<i32>
+  return %li : !list.list<i32>
 }
 
 // CHECK-LABEL: @no_elements

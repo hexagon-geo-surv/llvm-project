@@ -80,14 +80,6 @@ func.func @push_back_item_type_mismatch(%li: !list.list<i32>, %item: i64) {
 
 // -----
 
-func.func @peek_back_item_type_mismatch(%li: !list.list<i32>) {
-  // expected-error @below {{failed to verify that type of 'item' matches the element type of 'input'}}
-  %back = "list.peek_back"(%li) : (!list.list<i32>) -> i64
-  return
-}
-
-// -----
-
 func.func @peek_front_item_type_mismatch(%li: !list.list<i32>) {
   // expected-error @below {{failed to verify that type of 'item' matches the element type of 'input'}}
   %front = "list.peek_front"(%li) : (!list.list<i32>) -> i64
@@ -96,9 +88,9 @@ func.func @peek_front_item_type_mismatch(%li: !list.list<i32>) {
 
 // -----
 
-func.func @pop_back_result_type_mismatch(%li: !list.list<i32>) {
+func.func @pop_front_result_type_mismatch(%li: !list.list<i32>) {
   // expected-error @below {{failed to verify that all of {input, result} have same type}}
-  %shorter = "list.pop_back"(%li) : (!list.list<i32>) -> !list.list<i64>
+  %shorter = "list.pop_front"(%li) : (!list.list<i32>) -> !list.list<i64>
   return
 }
 

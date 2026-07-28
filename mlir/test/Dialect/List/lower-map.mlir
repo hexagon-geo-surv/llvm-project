@@ -1,12 +1,12 @@
-// RUN: mlir-opt %s -split-input-file -list-lower-map | FileCheck %s
+// RUN: mlir-opt %s -split-input-file -list-simplify | FileCheck %s
 
 // CHECK-LABEL: @map
 // CHECK-SAME:      %[[INPUT:.*]]: !list.list<i32>
-//       CHECK:   %[[C0:.*]] = arith.constant 0 : i32
-//       CHECK:   %[[EMPTY:.*]] = list.from_elements : () -> !list.list<i64>
+//       CHECK:   %[[TRUE:.*]] = arith.constant true
+//       CHECK:   %[[EMPTY:.*]] = list.empty : !list.list<i64>
 //       CHECK:   %[[LOOP:.*]]:2 = scf.while (%[[ARG:.*]] = %[[INPUT]], %[[ACC:.*]] = %[[EMPTY]]) : (!list.list<i32>, !list.list<i64>) -> (!list.list<i32>, !list.list<i64>) {
-//       CHECK:     %[[LEN:.*]] = list.length %[[ARG]] : !list.list<i32> -> i32
-//       CHECK:     %[[COND:.*]] = arith.cmpi ne, %[[LEN]], %[[C0]] : i32
+//       CHECK:     %[[IS_EMPTY:.*]] = list.is_empty %[[ARG]] : !list.list<i32> -> i1
+//       CHECK:     %[[COND:.*]] = arith.xori %[[IS_EMPTY]], %[[TRUE]] : i1
 //       CHECK:     scf.condition(%[[COND]]) %[[ARG]], %[[ACC]] : !list.list<i32>, !list.list<i64>
 //       CHECK:   } do {
 //       CHECK:   ^bb0(%[[ARG:.*]]: !list.list<i32>, %[[ACC:.*]]: !list.list<i64>):
@@ -69,46 +69,57 @@ func.func @outer_value(%input: !list.list<i32>, %factor: i32)
 
 // -----
 
-// Two maps become two loops, the second one iterating over the result of the
-// first one.
+// Every map that is left after the simplifications becomes a loop of its own.
+// (Two maps over the same list are merged into one instead, which the
+// simplification tests cover.)
 
-// CHECK-LABEL: @consecutive_maps
-// CHECK-SAME:      %[[INPUT:.*]]: !list.list<i32>
-//       CHECK:   %[[FIRST:.*]]:2 = scf.while (%{{.*}} = %[[INPUT]],
+// CHECK-LABEL: @two_maps
+// CHECK-SAME:      %[[FIRST:[^:]*]]: !list.list<i32>, %[[SECOND:[^:]*]]: !list.list<i32>
+//       CHECK:   %[[DOUBLED:.*]]:2 = scf.while (%{{.*}} = %[[FIRST]],
 //       CHECK:   } do {
-//       CHECK:     list.peek_front
+//       CHECK:     arith.addi
 //       CHECK:   }
-//       CHECK:   %[[SECOND:.*]]:2 = scf.while (%{{.*}} = %[[FIRST]]#1,
+//       CHECK:   %[[SQUARED:.*]]:2 = scf.while (%{{.*}} = %[[SECOND]],
 //       CHECK:   } do {
-//       CHECK:     list.peek_front
+//       CHECK:     arith.muli
 //       CHECK:   }
-//       CHECK:   return %[[SECOND]]#1
-func.func @consecutive_maps(%input: !list.list<i32>) -> !list.list<i32> {
-  %first = list.map %input with (%a : i32) -> i32 {
-    list.yield %a : i32
+//       CHECK:   return %[[DOUBLED]]#1, %[[SQUARED]]#1
+func.func @two_maps(%first: !list.list<i32>, %second: !list.list<i32>)
+    -> (!list.list<i32>, !list.list<i32>) {
+  %doubled = list.map %first with (%a : i32) -> i32 {
+    %0 = arith.addi %a, %a : i32
+    list.yield %0 : i32
   }
-  %second = list.map %first with (%b : i32) -> i32 {
-    list.yield %b : i32
+  %squared = list.map %second with (%b : i32) -> i32 {
+    %1 = arith.muli %b, %b : i32
+    list.yield %1 : i32
   }
-  return %second : !list.list<i32>
+  return %doubled, %squared : !list.list<i32>, !list.list<i32>
 }
 
 // -----
 
-// A map nested in the body of another map becomes a loop nested in a loop.
+// Everything in the body of a map is lowered as well, so the range, the nested
+// map and the length in this body all become loops nested in the loop of the
+// outer map.
 
 // CHECK-LABEL: @nested_map
-//       CHECK:   scf.while
+// CHECK-SAME:      %[[INPUT:.*]]: !list.list<i32>
+//       CHECK:   %[[C0:.*]] = arith.constant 0 : i32
+//       CHECK:   %[[C1:.*]] = arith.constant 1 : i32
+//       CHECK:   scf.while (%{{.*}} = %[[INPUT]],
 //       CHECK:   } do {
 //       CHECK:     %[[ELEM:.*]] = list.peek_front
 //       CHECK:     %[[REST:.*]] = list.pop_front
-//       CHECK:     %[[RANGE:.*]] = list.range %[[ELEM]] to %[[ELEM]]
-//       CHECK:     %[[INNER:.*]]:2 = scf.while (%{{.*}} = %[[RANGE]],
-//       CHECK:     } do {
-//       CHECK:       list.peek_front
+//       CHECK:     %[[RANGE:.*]] = scf.for %{{.*}} = %[[ELEM]] to %[[ELEM]] step %[[C1]]
+//       CHECK:       list.push_back
 //       CHECK:     }
-//       CHECK:     %[[LEN:.*]] = list.length %[[INNER]]#1
-//       CHECK:     %[[LONGER:.*]] = list.push_back %{{.*}}, %[[LEN]]
+// The loop of the nested map, whose result the length no longer reads.
+//       CHECK:     scf.while (%{{.*}} = %[[RANGE]], %{{.*}}) : (!list.list<i32>, !list.list<i32>)
+//       CHECK:     }
+//       CHECK:     %[[LEN:.*]]:2 = scf.while (%{{.*}} = %[[RANGE]], %{{.*}} = %[[C0]]) : (!list.list<i32>, i32)
+//       CHECK:     }
+//       CHECK:     %[[LONGER:.*]] = list.push_back %{{.*}}, %[[LEN]]#1
 //       CHECK:     scf.yield %[[REST]], %[[LONGER]]
 func.func @nested_map(%input: !list.list<i32>) -> !list.list<i32> {
   %mapped = list.map %input with (%element : i32) -> i32 {

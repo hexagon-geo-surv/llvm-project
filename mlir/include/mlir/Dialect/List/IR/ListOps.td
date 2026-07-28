@@ -24,6 +24,23 @@ class List_ItemTypeMatchesElementType<string listArg, string itemArg>
                      "::llvm::cast<::mlir::list::ListType>($_self)"
                      ".getElementType()">;
 
+def List_EmptyOp : List_Op<"empty"> {
+  let summary = "list without any element";
+  let description = [{
+    Creates a list that holds no element.
+
+    Example:
+
+    ```mlir
+    %li = list.empty : !list.list<i32>
+    ```
+  }];
+
+  let results = (outs List_ListType:$result);
+
+  let assemblyFormat = "attr-dict `:` qualified(type($result))";
+}
+
 def List_FromElementsOp : List_Op<"from_elements"> {
   let summary = "list holding the given elements";
   let description = [{
@@ -69,6 +86,31 @@ def List_GetElementsOp : List_Op<"get_elements"> {
       "$input attr-dict `:` functional-type($input, $elements)";
 
   let hasVerifier = 1;
+}
+
+def List_IsEmptyOp : List_Op<"is_empty"> {
+  let summary = "whether a list holds no element";
+  let description = [{
+    Returns whether the operand list holds no element.
+
+    Example:
+
+    ```mlir
+    %is_empty = list.is_empty %li : !list.list<i32> -> i1
+    ```
+  }];
+
+  let arguments = (ins List_ListType:$input);
+  let results = (outs I1:$result);
+
+  let assemblyFormat =
+      "$input attr-dict `:` qualified(type($input)) `->` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$input), [{
+      build($_builder, $_state, $_builder.getI1Type(), input);
+    }]>
+  ];
 }
 
 def List_LengthOp : List_Op<"length"> {
@@ -133,34 +175,6 @@ def List_MapOp : List_Op<"map"> {
   }];
 }
 
-def List_PeekBackOp : List_Op<"peek_back",
-    [List_ItemTypeMatchesElementType<"input", "item">]> {
-  let summary = "last element of a list";
-  let description = [{
-    Returns the last element of the operand list. The behavior is undefined if
-    the list is empty.
-
-    Example:
-
-    ```mlir
-    %item = list.peek_back %li : !list.list<i32> -> i32
-    ```
-  }];
-
-  let arguments = (ins List_ListType:$input);
-  let results = (outs AnyInteger:$item);
-
-  let assemblyFormat =
-      "$input attr-dict `:` qualified(type($input)) `->` type($item)";
-
-  let builders = [
-    OpBuilder<(ins "::mlir::Value":$input), [{
-      build($_builder, $_state,
-            ::llvm::cast<ListType>(input.getType()).getElementType(), input);
-    }]>
-  ];
-}
-
 def List_PeekFrontOp : List_Op<"peek_front",
     [List_ItemTypeMatchesElementType<"input", "item">]> {
   let summary = "first element of a list";
@@ -185,31 +199,6 @@ def List_PeekFrontOp : List_Op<"peek_front",
     OpBuilder<(ins "::mlir::Value":$input), [{
       build($_builder, $_state,
             ::llvm::cast<ListType>(input.getType()).getElementType(), input);
-    }]>
-  ];
-}
-
-def List_PopBackOp : List_Op<"pop_back", [AllTypesMatch<["input", "result"]>]> {
-  let summary = "list without its last element";
-  let description = [{
-    Returns the operand list without its last element. The behavior is undefined
-    if the list is empty.
-
-    Example:
-
-    ```mlir
-    %shorter = list.pop_back %li : !list.list<i32>
-    ```
-  }];
-
-  let arguments = (ins List_ListType:$input);
-  let results = (outs List_ListType:$result);
-
-  let assemblyFormat = "$input attr-dict `:` qualified(type($input))";
-
-  let builders = [
-    OpBuilder<(ins "::mlir::Value":$input), [{
-      build($_builder, $_state, input.getType(), input);
     }]>
   ];
 }
@@ -282,6 +271,32 @@ def List_PushBackOp : List_Op<"push_back",
   ];
 }
 
+def List_PushFrontOp : List_Op<"push_front",
+    [AllTypesMatch<["input", "result"]>,
+     List_ItemTypeMatchesElementType<"input", "item">]> {
+  let summary = "list with an element prepended";
+  let description = [{
+    Returns the operand list with `$item` prepended to it.
+
+    Example:
+
+    ```mlir
+    %longer = list.push_front %li, %item : !list.list<i32>
+    ```
+  }];
+
+  let arguments = (ins List_ListType:$input, AnyInteger:$item);
+  let results = (outs List_ListType:$result);
+
+  let assemblyFormat = "$input `,` $item attr-dict `:` qualified(type($input))";
+
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$input, "::mlir::Value":$item), [{
+      build($_builder, $_state, input.getType(), input, item);
+    }]>
+  ];
+}
+
 def List_RangeOp : List_Op<"range"> {
   let summary = "list of consecutive integers";
   let description = [{
@@ -301,6 +316,30 @@ def List_RangeOp : List_Op<"range"> {
 
   let assemblyFormat =
       "$lower `to` $upper attr-dict `:` qualified(type($result))";
+}
+
+def List_ReverseOp : List_Op<"reverse", [AllTypesMatch<["input", "result"]>]> {
+  let summary = "list with its elements in reverse order";
+  let description = [{
+    Returns the elements of the operand list in reverse order.
+
+    Example:
+
+    ```mlir
+    %reversed = list.reverse %li : !list.list<i32>
+    ```
+  }];
+
+  let arguments = (ins List_ListType:$input);
+  let results = (outs List_ListType:$result);
+
+  let assemblyFormat = "$input attr-dict `:` qualified(type($input))";
+
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$input), [{
+      build($_builder, $_state, input.getType(), input);
+    }]>
+  ];
 }
 
 def List_YieldOp : List_Op<"yield", [Terminator, HasParent<"MapOp">]> {

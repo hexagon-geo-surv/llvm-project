@@ -1,8 +1,5 @@
 add_mlir_dialect_library(MLIRListTransforms
-  ListLowerMap.cpp
-  ListLowerRange.cpp
   ListSimplify.cpp
-  ListSimplifyElements.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${MLIR_MAIN_INCLUDE_DIR}/mlir/Dialect/List/Transforms
@@ -18,4 +15,5 @@ add_mlir_dialect_library(MLIRListTransforms
   MLIRSCFDialect
   MLIRSupport
   MLIRTransforms
+  MLIRVectorDialect
   )
