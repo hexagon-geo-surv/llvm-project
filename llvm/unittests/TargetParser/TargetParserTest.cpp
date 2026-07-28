@@ -2746,6 +2746,49 @@ TEST(TargetParserTest, testAMDGPUparseArchR600) {
     EXPECT_TRUE(llvm::is_contained(Values, A.Alias)) << A.Alias;
 }
 
+TEST(TargetParserTest, testAMDGPUfillAMDGPUFeatureMap) {
+  auto HasFeature = [](StringRef GPU, StringRef Feature) {
+    StringMap<bool> Features;
+    AMDGPU::fillAMDGPUFeatureMap(GPU, Triple("amdgcn-amd-amdhsa"), Features);
+    auto It = Features.find(Feature);
+    return It != Features.end() && It->second;
+  };
+
+  // Instruction features come from the .td SubtargetFeature closure, so a GPU
+  // gets everything its features transitively imply (not a hand-maintained
+  // subset). gfx900 implies the gfx8/gfx9 instruction sets.
+  EXPECT_TRUE(HasFeature("gfx900", "gfx9-insts"));
+  EXPECT_TRUE(HasFeature("gfx900", "gfx8-insts"));
+  EXPECT_TRUE(HasFeature("gfx900", "ci-insts"));
+  EXPECT_TRUE(HasFeature("gfx900", "dpp"));
+  // cvt-pknorm-vop3-insts is implied by FeatureGFX9 alongside the vop2 variant.
+  EXPECT_TRUE(HasFeature("gfx900", "cvt-pknorm-vop2-insts"));
+  EXPECT_TRUE(HasFeature("gfx900", "cvt-pknorm-vop3-insts"));
+  // extended-image-insts is available on gfx6-gfx11/gfx13 hardware.
+  EXPECT_TRUE(HasFeature("gfx900", "extended-image-insts"));
+  EXPECT_TRUE(HasFeature("gfx1100", "extended-image-insts"));
+
+  // Backend-only features are not frontend-visible.
+  EXPECT_FALSE(HasFeature("gfx900", "flat-scratch-insts"));
+  EXPECT_FALSE(HasFeature("gfx900", "sdwa"));
+
+  // Native wavesize: wave64-only GPUs pin wavefrontsize64 and wave32-only GPUs
+  // pin wavefrontsize32 (from the feature closure). Dual-mode GPUs
+  // (gfx10/gfx11) carry neither in the closure, so insertWaveSizeFeature
+  // defaults them to wavefrontsize32.
+  EXPECT_TRUE(HasFeature("gfx900", "wavefrontsize64"));
+  EXPECT_FALSE(HasFeature("gfx900", "wavefrontsize32"));
+  EXPECT_TRUE(HasFeature("gfx1250", "wavefrontsize32"));
+  EXPECT_FALSE(HasFeature("gfx1250", "wavefrontsize64"));
+  EXPECT_TRUE(HasFeature("gfx1010", "wavefrontsize32"));
+  EXPECT_FALSE(HasFeature("gfx1010", "wavefrontsize64"));
+
+  // gfx1250/gfx1310 newer features.
+  EXPECT_TRUE(HasFeature("gfx1250", "bvh-ray-tracing-insts"));
+  EXPECT_TRUE(HasFeature("gfx1250", "smem-prefetch-insts"));
+  EXPECT_TRUE(HasFeature("gfx950", "bf16-cvt-insts"));
+}
+
 TEST(TargetParserTest, testAMDGPUfillValidArchListAMDGCN) {
   SmallVector<StringRef, 0> All;
   AMDGPU::fillValidArchListAMDGCN(All, Triple::NoSubArch);
