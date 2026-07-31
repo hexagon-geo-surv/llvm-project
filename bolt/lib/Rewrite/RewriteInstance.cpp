@@ -3779,6 +3779,8 @@ void RewriteInstance::readDebugInfo() {
                        TimerGroupDesc, opts::TimeRewrite);
     BC->collectDebugScopeBoundaries();
   }
+
+  BC->releaseAllDWOContexts();
 }
 
 void RewriteInstance::preprocessProfileData() {
