@@ -1,6 +1,5 @@
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/SandboxVectorizerPassBuilder.h"
 
-#include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/BottomUpVec.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/LoadStoreVec.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/NullPass.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PackReuse.h"
@@ -8,6 +7,7 @@
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PrintRegion.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/RegionsFromBBs.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/RegionsFromMetadata.h"
+#include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/SLPTreeVec.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/SeedCollection.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/TransactionAcceptOrRevert.h"
 #include "llvm/Transforms/Vectorize/SandboxVectorizer/Passes/TransactionAlwaysAccept.h"

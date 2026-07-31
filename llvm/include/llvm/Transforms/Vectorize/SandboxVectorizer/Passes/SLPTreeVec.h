@@ -1,4 +1,4 @@
-//===- BottomUpVec.h --------------------------------------------*- C++ -*-===//
+//===- SLPTreeVec.h ---------------------------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,11 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// A Bottom-Up Vectorizer pass.
+// An SLP-style vectorizer pass that builds a bottom-up / top-down vectorization
+// tree.
 //
 
-#ifndef LLVM_TRANSFORMS_VECTORIZE_SANDBOXVECTORIZER_PASSES_BOTTOMUPVEC_H
-#define LLVM_TRANSFORMS_VECTORIZE_SANDBOXVECTORIZER_PASSES_BOTTOMUPVEC_H
+#ifndef LLVM_TRANSFORMS_VECTORIZE_SANDBOXVECTORIZER_PASSES_SLPTREEVEC_H
+#define LLVM_TRANSFORMS_VECTORIZE_SANDBOXVECTORIZER_PASSES_SLPTREEVEC_H
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
@@ -22,7 +23,7 @@
 
 namespace llvm::sandboxir {
 
-/// This is a simple bottom-up vectorizer Region pass.
+/// This is a simple SLP-style vectorizer Region pass.
 /// It expects a "seed slice" as an input in the Region's Aux vector.
 /// The "seed slice" is a vector of instructions that can be used as a starting
 /// point for vectorization, like stores to consecutive memory addresses.
@@ -32,7 +33,7 @@ namespace llvm::sandboxir {
 /// profitable or not. For now profitability is checked at the end of the region
 /// pass pipeline by a dedicated pass that accepts or rejects the IR
 /// transaction, depending on the cost.
-class LLVM_ABI BottomUpVec final : public RegionPass {
+class LLVM_ABI SLPTreeVec final : public RegionPass {
   bool Change = false;
   /// The original instructions that are potentially dead after vectorization.
   DenseSet<Instruction *> DeadInstrCandidates;
@@ -40,7 +41,7 @@ class LLVM_ABI BottomUpVec final : public RegionPass {
   std::unique_ptr<InstrMaps> IMaps;
   /// Counter used for force-stopping the vectorizer after this many
   /// invocations. Used for debugging miscompiles.
-  unsigned long BottomUpInvocationCnt = 0;
+  unsigned long InvocationCnt = 0;
 
   /// Creates and returns a vector instruction that replaces the instructions in
   /// \p Bndl. \p Operands are the already vectorized operands.
@@ -98,7 +99,7 @@ class LLVM_ABI BottomUpVec final : public RegionPass {
   bool tryVectorize(ArrayRef<Value *> Seeds, LegalityAnalysis &Legality);
 
 public:
-  BottomUpVec(StringRef AuxArg) : RegionPass("bottom-up-vec") {
+  SLPTreeVec(StringRef AuxArg) : RegionPass("slp-tree-vec") {
     assert(AuxArg.empty() && "This pass ignores aux arg!");
   }
   bool runOnRegion(Region &Rgn, const Analyses &A) final;
@@ -106,4 +107,4 @@ public:
 
 } // namespace llvm::sandboxir
 
-#endif // LLVM_TRANSFORMS_VECTORIZE_SANDBOXVECTORIZER_PASSES_BOTTOMUPVEC_H
+#endif // LLVM_TRANSFORMS_VECTORIZE_SANDBOXVECTORIZER_PASSES_SLPTREEVEC_H

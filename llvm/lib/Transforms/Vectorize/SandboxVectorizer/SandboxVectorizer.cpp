@@ -49,11 +49,11 @@ SandboxVectorizerPass::SandboxVectorizerPass() : FPM("fpm") {
   if (UserDefinedPassPipeline == DefaultPipelineMagicStr) {
     // TODO: Add passes to the default pipeline. It currently contains:
     //       - Seed collection, which creates seed regions and runs the pipeline
-    //         - Bottom-up Vectorizer pass that starts from a seed
+    //         - SLP-tree Vectorizer pass that starts from a seed
     //         - Load-Store Vectorizer pass for load-store chains
     //         - Accept or revert IR state pass
     FPM.setPassPipeline(
-        "seed-collection<tr-save,bottom-up-vec,load-store-vec,tr-accept-or-"
+        "seed-collection<tr-save,slp-tree-vec,load-store-vec,tr-accept-or-"
         "revert>",
         sandboxir::SandboxVectorizerPassBuilder::createFunctionPass);
   } else {
@@ -133,7 +133,7 @@ bool SandboxVectorizerPass::runImpl(Function &LLVMF) {
     return false;
   }
 
-  // Create SandboxIR for LLVMF and run BottomUpVec on it.
+  // Create SandboxIR for LLVMF and run SLPTreeVec on it.
   sandboxir::Function &F = *Ctx->createFunction(&LLVMF);
   sandboxir::Analyses A(*AA, *SE, *TTI);
   bool Change = FPM.runOnFunction(F, A);
