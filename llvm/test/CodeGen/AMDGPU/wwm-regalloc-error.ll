@@ -1,8 +1,22 @@
-; RUN: not llc -mtriple=amdgpu9.00-amd-amdhsa -stress-regalloc=2 -filetype=null %s 2>&1 | FileCheck %s
+; RUN: llc -mtriple=amdgpu9.00-amd-amdhsa -stress-regalloc=2 -o - %s | FileCheck %s
+; RUN: llc -mtriple=amdgpu9.00-amd-amdhsa -stress-regalloc=2 -stop-after=si-lower-sgpr-spills -o %t.mir %s
+; RUN: FileCheck --check-prefix=MIR %s < %t.mir
+; RUN: llc -mtriple=amdgpu9.00-amd-amdhsa -stress-regalloc=2 -start-after=si-lower-sgpr-spills -o - %t.mir | FileCheck --check-prefix=ROUNDTRIP %s
 
-; A negative test to capture the expected error when the VGPRs are insufficient for wwm-regalloc.
+; All allocatable VGPRs are mentioned by inline assembly. Ordinary SGPR spills
+; must fall back to scratch memory when no separate WWM pool is available.
 
-; CHECK: error: cannot find enough VGPRs for wwm-regalloc
+; CHECK-LABEL: test:
+; CHECK: buffer_store_dword {{.*}} ; 4-byte Folded Spill
+; CHECK: buffer_load_dword {{.*}} ; 4-byte Folded Reload
+; CHECK: s_endpgm
+; CHECK: .amdhsa_private_segment_fixed_size 20
+
+; MIR: hasNoWWMPoolSGPRSpillFallback: true
+
+; ROUNDTRIP-LABEL: test:
+; ROUNDTRIP: s_endpgm
+; ROUNDTRIP: .amdhsa_private_segment_fixed_size 20
 
 define amdgpu_kernel void @test(i32 %in) {
 entry:
