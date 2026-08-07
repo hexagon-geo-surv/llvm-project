@@ -59,6 +59,8 @@ def IsAAPCS_ABI : LibcallPredicate<[{isAAPCS_ABI(TT, ABIName)}]>;
 def IsEABI4 : LibcallPredicate<[{EABIVersion == EABI::EABI4}]>;
 def IsEABI5 : LibcallPredicate<[{EABIVersion == EABI::EABI5}]>;
 
+def IsLongDoubleF128 : LibcallPredicate<[{LongDoubleFormat == LongDoubleFormat::IEEEquad}]>;
+
 def IsAMDGPU : LibcallPredicate<[{TT.isAMDGPU()}]>;
 def IsARM : LibcallPredicate<[{TT.isARM()}]>;
 def IsThumb : LibcallPredicate<[{TT.isThumb()}]>;
@@ -108,6 +110,10 @@ def IsArchXtensa : LibcallPredicate<[{TT.getArch() == Triple::xtensa}]>;
 def isOSDarwin : RuntimeLibcallAvailability<(all_of IsOSDarwin)>;
 def isOSOpenBSD : RuntimeLibcallAvailability<(all_of IsOSOpenBSD)>;
 def isNotOSOpenBSD : RuntimeLibcallAvailability<(not IsOSOpenBSD)>;
+
+// True when the C `long double` type is IEEE fp128.
+def isLongDoubleF128 : RuntimeLibcallAvailability<(all_of IsLongDoubleF128)>;
+
 def isOSWindows : RuntimeLibcallAvailability<(all_of IsOSWindows)>;
 def isNotOSWindows : RuntimeLibcallAvailability<(not IsOSWindows)>;
 def isNotOSLinux : RuntimeLibcallAvailability<(not IsOSLinux)>;
@@ -1929,17 +1935,30 @@ defvar DefaultRuntimeLibcallImpls_f128 =
     !filter(entry, AllDefaultRuntimeLibcallImpls,
             !match(!cast<string>(entry.Provides), "_F128"));
 
+// The `l`-suffixed libm functions only exist when long double is
+// fp128.
+defvar DefaultRuntimeLibcallImpls_longdouble_f128 =
+    !filter(entry, AllDefaultRuntimeLibcallImpls,
+            !match(!cast<string>(entry), "l_f128"));
+
 // FIXME: Ideally we would just use dags everywhere, but for the
 // arm64ec case we need iterable lists so we can add the # prefix
+//
+// The long-double fp128 slice is dropped here and added back below gated on the
+// long double format.
 defvar DefaultRuntimeLibcallImplsBaseList =
 !listremove(
   !listremove(
-    !listremove(AllDefaultRuntimeLibcallImpls, Int128RTLibcalls),
-                DefaultRuntimeLibcallImpls_f80),
-                DefaultRuntimeLibcallImpls_ppcf128);
+    !listremove(
+      !listremove(AllDefaultRuntimeLibcallImpls, Int128RTLibcalls),
+                  DefaultRuntimeLibcallImpls_f80),
+                  DefaultRuntimeLibcallImpls_ppcf128),
+                  DefaultRuntimeLibcallImpls_longdouble_f128);
 
 defvar DefaultRuntimeLibcallImpls =
   (add DefaultRuntimeLibcallImplsBaseList,
+       LibcallImpls<(add DefaultRuntimeLibcallImpls_longdouble_f128),
+                    isLongDoubleF128>,
        ExceptionModelCalls);
 
 /// Default set of libcall impls for 32-bit architectures.
