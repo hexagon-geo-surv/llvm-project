@@ -59,6 +59,23 @@ static bool isUndef(const MachineInstr &MI) {
          MI.getOpcode() == TargetOpcode::IMPLICIT_DEF;
 }
 
+template <>
+void MachineSSAContext::getPhiInputs(
+    const MachineInstr &Phi, SmallVectorImpl<Register> &Values,
+    SmallVectorImpl<const MachineBasicBlock *> &Blocks) {
+  if (!Phi.isPHI())
+    return;
+  const MachineRegisterInfo &MRI = Phi.getMF()->getRegInfo();
+  for (unsigned I = 1, E = Phi.getNumOperands(); I < E; I += 2) {
+    Register Incoming = Phi.getOperand(I).getReg();
+    // Report undef inputs as a null register.
+    if (Incoming && isUndef(*MRI.getVRegDef(Incoming)))
+      Incoming = Register();
+    Values.push_back(Incoming);
+    Blocks.push_back(Phi.getOperand(I + 1).getMBB());
+  }
+}
+
 template <> bool MachineSSAContext::isAlwaysUniform(Register) { return false; }
 
 /// MachineInstr equivalent of PHINode::hasConstantOrUndefValue() for G_PHI.

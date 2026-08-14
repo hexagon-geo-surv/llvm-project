@@ -480,6 +480,11 @@ private:
   /// the worklist.
   void taintAndPushPhiNodes(const BlockT &JoinBlock);
 
+  /// \brief Mark and enqueue phi nodes in cycle exit \p ExitBlock that select
+  /// differing values along the edges leaving \p ExitedCycle.
+  void taintAndPushCycleExitPhiNodes(const BlockT &ExitBlock,
+                                     CycleRef ExitedCycle);
+
   /// \brief Identify all Instructions that become divergent because \p DivExit
   /// is a divergent cycle exit of \p DivCycle. Mark those instructions as
   /// divergent and push them on the worklist.
@@ -971,6 +976,45 @@ void GenericUniformityAnalysisImpl<ContextT>::taintAndPushPhiNodes(
   }
 }
 
+/// Threads may leave \p ExitedCycle along different exit edges, so a phi in
+/// exit block \p ExitBlock is divergent when it selects differing values along
+/// those edges -- even for constants, which usesValueFromCycle() ignores. Only
+/// edges from predecessors inside \p ExitedCycle are compared; temporal
+/// divergence of cycle-internal values is handled by
+/// propagateCycleExitDivergence().
+template <typename ContextT>
+void GenericUniformityAnalysisImpl<ContextT>::taintAndPushCycleExitPhiNodes(
+    const BlockT &ExitBlock, CycleRef ExitedCycle) {
+  LLVM_DEBUG(dbgs() << "taintAndPushCycleExitPhiNodes in "
+                    << Context.print(&ExitBlock) << "\n");
+  SmallVector<ConstValueRefT, 4> Values;
+  SmallVector<const BlockT *, 4> Blocks;
+  for (const auto &Phi : ExitBlock.phis()) {
+    Values.clear();
+    Blocks.clear();
+    ContextT::getPhiInputs(Phi, Values, Blocks);
+
+    ConstValueRefT CommonValue = ContextT::ValueRefNull;
+    bool HasCommonValue = false;
+    for (unsigned I = 0, E = Blocks.size(); I != E; ++I) {
+      // Only edges leaving the cycle carry a per-thread exit choice.
+      if (!CI.contains(ExitedCycle, Blocks[I]))
+        continue;
+      ConstValueRefT Incoming = Values[I];
+      // Skip undef inputs.
+      if (Incoming == ContextT::ValueRefNull)
+        continue;
+      if (!HasCommonValue) {
+        CommonValue = Incoming;
+        HasCommonValue = true;
+      } else if (Incoming != CommonValue) {
+        markDivergent(Phi);
+        break;
+      }
+    }
+  }
+}
+
 /// Add \p Candidate to \p Cycles if it is not already contained in \p Cycles.
 ///
 /// \return true iff \p Candidate was added to \p Cycles.
@@ -1148,6 +1192,19 @@ void GenericUniformityAnalysisImpl<ContextT>::analyzeControlDivergence(
   CycleRef BranchCycle = CI.getCycle(DivTermBlock);
   assert(DivDesc.CycleDivBlocks.empty() || BranchCycle);
   for (const auto *DivExitBlock : DivDesc.CycleDivBlocks) {
+    // Use the outermost cycle actually left by this exit (an exit edge may
+    // leave several nested cycles at once), matching
+    // propagateCycleExitDivergence; the branch's own inner cycle would miss
+    // predecessors in an enclosing cycle.
+    CycleRef ExitLevelCycle = CI.getCycle(DivExitBlock);
+    const unsigned CycleExitDepth =
+        ExitLevelCycle ? CI.getDepth(ExitLevelCycle) : 0;
+    CycleRef OuterDivCycle = BranchCycle;
+    for (CycleRef C = BranchCycle; C && CI.getDepth(C) > CycleExitDepth;
+         C = CI.getParentCycle(C))
+      OuterDivCycle = C;
+
+    taintAndPushCycleExitPhiNodes(*DivExitBlock, OuterDivCycle);
     propagateCycleExitDivergence(*DivExitBlock, BranchCycle);
   }
 }
