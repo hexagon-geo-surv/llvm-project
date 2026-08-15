@@ -3609,6 +3609,7 @@ add_fp_unittest(
     SqrtTest.h
   DEPENDS
     libc.src.math.sqrtf128
+    libc.src.__support.FPUtil.float128
 )
 
 add_fp_unittest(
