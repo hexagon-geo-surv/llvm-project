@@ -2058,6 +2058,7 @@ add_fp_unittest(
   HDRS
     NextAfterTest.h
   DEPENDS
+    libc.src.__support.FPUtil.float128
     libc.src.math.nextafterf128
     libc.src.__support.FPUtil.basic_operations
     libc.src.__support.FPUtil.fp_bits
