@@ -4263,6 +4263,7 @@ add_fp_unittest(
   HDRS
     NextDownTest.h
   DEPENDS
+    libc.src.__support.FPUtil.float128
     libc.src.math.nextdownf128
 )
 
