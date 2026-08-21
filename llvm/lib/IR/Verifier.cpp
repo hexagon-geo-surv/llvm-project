@@ -1618,7 +1618,7 @@ void Verifier::visitDISubprogram(const DISubprogram &N) {
               "invalid retained nodes, retained node is not local", &N, Node,
               RetainedNode);
 
-      DISubprogram *RetainedNodeSP = RetainedNodeScope->getSubprogram();
+      DISubprogram *RetainedNodeSP = getSubprogram(RetainedNodeScope);
       DICompileUnit *RetainedNodeUnit =
           RetainedNodeSP ? RetainedNodeSP->getUnit() : nullptr;
       CheckDI(
@@ -3444,7 +3444,9 @@ void Verifier::visitFunction(const Function &F) {
     if (hasDIScopeCycle(Scope))
       return;
 
-    DISubprogram *SP = Scope->getSubprogram();
+    DISubprogram *SP = getSubprogram(Scope);
+    CheckDI(SP, "DILocalScope scope chain must terminate at a DISubprogram", DL,
+            Scope);
 
     // Scope and SP could be the same MDNode and we don't want to skip
     // validation in that case
@@ -6057,10 +6059,11 @@ void Verifier::visitInstruction(Instruction &I) {
 
     if (auto *DL = dyn_cast<DILocation>(N)) {
       if (DL->getAtomGroup()) {
-        CheckDI(DL->getScope()->getSubprogram()->getKeyInstructionsEnabled(),
+        DISubprogram *SP = getSubprogram(DL->getRawScope());
+        CheckDI(SP && SP->getKeyInstructionsEnabled(),
                 "DbgLoc uses atomGroup but DISubprogram doesn't have Key "
                 "Instructions enabled",
-                DL, DL->getScope()->getSubprogram());
+                DL, SP);
       }
     }
   }
@@ -7261,8 +7264,7 @@ void Verifier::visit(DbgLabelRecord &DLR) {
 
   CheckDI(LabelSP == LocSP,
           "mismatched subprogram between #dbg_label label and !dbg attachment",
-          &DLR, BB, F, Label, Label->getScope()->getSubprogram(), Loc,
-          Loc->getScope()->getSubprogram());
+          &DLR, BB, F, Label, LabelSP, Loc, LocSP);
 }
 
 void Verifier::visit(DbgVariableRecord &DVR) {
@@ -7351,8 +7353,7 @@ void Verifier::visit(DbgVariableRecord &DVR) {
 
   CheckDI(VarSP == LocSP,
           "mismatched subprogram between #dbg record variable and DILocation",
-          &DVR, BB, F, Var, Var->getScope()->getSubprogram(), Loc,
-          Loc->getScope()->getSubprogram(), BB, F);
+          &DVR, BB, F, Var, VarSP, Loc, LocSP, BB, F);
 
   verifyFnArgs(DVR);
 }
