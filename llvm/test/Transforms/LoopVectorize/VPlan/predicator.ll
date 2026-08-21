@@ -762,12 +762,12 @@ define void @simplifiable_blend(i1 %c1, i1 %c2, i1 %c3, i32 %x, i32 %y, ptr %p) 
 ; CHECK-NEXT:    Successor(s): D
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    D:
-; CHECK-NEXT:      EMIT vp<[[VP7:%[0-9]+]]> = not ir<%c2>
-; CHECK-NEXT:      EMIT vp<[[VP8:%[0-9]+]]> = logical-and ir<%c1>, vp<[[VP7]]>
+; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = not ir<%c2>
+; CHECK-NEXT:      EMIT vp<[[VP6:%[0-9]+]]> = logical-and ir<%c1>, vp<[[VP5]]>
 ; CHECK-NEXT:    Successor(s): C
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    C:
-; CHECK-NEXT:      EMIT vp<[[VP9:%[0-9]+]]> = logical-and ir<%c1>, ir<%c2>
+; CHECK-NEXT:      EMIT vp<[[VP7:%[0-9]+]]> = logical-and ir<%c1>, ir<%c2>
 ; CHECK-NEXT:    Successor(s): latch
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    latch:
@@ -781,8 +781,6 @@ define void @simplifiable_blend(i1 %c1, i1 %c2, i1 %c3, i32 %x, i32 %y, ptr %p) 
 ; CHECK-NEXT:    No successors
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    E:
-; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = not ir<%c3>
-; CHECK-NEXT:      EMIT vp<[[VP6:%[0-9]+]]> = logical-and vp<[[VP4]]>, vp<[[VP5]]>
 ; CHECK-NEXT:    Successor(s): F
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block
@@ -1043,15 +1041,14 @@ define void @outermost_uniform_branch_no_phi(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    Successor(s): bb1, bb4
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb1:
-; CHECK-NEXT:      EMIT ir<%add1> = add ir<%iv>, ir<1>, ir<%u0>
-; CHECK-NEXT:      EMIT store ir<%add1>, ir<%gep>, ir<%u0>
-; CHECK-NEXT:      EMIT ir<%v1> = icmp sle ir<%iv>, ir<1>, ir<%u0>
+; CHECK-NEXT:      EMIT ir<%add1> = add ir<%iv>, ir<1>
+; CHECK-NEXT:      EMIT store ir<%add1>, ir<%gep>
+; CHECK-NEXT:      EMIT ir<%v1> = icmp sle ir<%iv>, ir<1>
 ; CHECK-NEXT:    Successor(s): bb2
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb2:
-; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = logical-and ir<%u0>, ir<%v1>
-; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, vp<[[VP4]]>
-; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, ir<%v1>
+; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, ir<%v1>
 ; CHECK-NEXT:    Successor(s): bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
@@ -1216,20 +1213,18 @@ define void @outermost_uniform_branch_more_blocks_no_phi(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    Successor(s): bb2, bb1
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb2:
-; CHECK-NEXT:      EMIT ir<%v2> = icmp sle ir<%iv>, ir<2>, ir<%u0>
+; CHECK-NEXT:      EMIT ir<%v2> = icmp sle ir<%iv>, ir<2>
 ; CHECK-NEXT:    Successor(s): bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
-; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = not ir<%v2>
-; CHECK-NEXT:      EMIT vp<[[VP6:%[0-9]+]]> = logical-and ir<%u0>, vp<[[VP5]]>
-; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, vp<[[VP6]]>
-; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, vp<[[VP6]]>
+; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = not ir<%v2>
+; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, vp<[[VP4]]>
 ; CHECK-NEXT:    Successor(s): bb4
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
-; CHECK-NEXT:      EMIT vp<[[VP7:%[0-9]+]]> = logical-and ir<%u0>, ir<%v2>
-; CHECK-NEXT:      EMIT ir<%add4> = add ir<%iv>, ir<4>, vp<[[VP7]]>
-; CHECK-NEXT:      EMIT store ir<%add4>, ir<%gep>, vp<[[VP7]]>
+; CHECK-NEXT:      EMIT ir<%add4> = add ir<%iv>, ir<4>, ir<%v2>
+; CHECK-NEXT:      EMIT store ir<%add4>, ir<%gep>, ir<%v2>
 ; CHECK-NEXT:    Successor(s): bb5
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb5:
@@ -1243,9 +1238,8 @@ define void @outermost_uniform_branch_more_blocks_no_phi(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    No successors
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb1:
-; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = not ir<%u0>
-; CHECK-NEXT:      EMIT ir<%add1> = add ir<%iv>, ir<1>, vp<[[VP4]]>
-; CHECK-NEXT:      EMIT store ir<%add1>, ir<%gep>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT ir<%add1> = add ir<%iv>, ir<1>
+; CHECK-NEXT:      EMIT store ir<%add1>, ir<%gep>
 ; CHECK-NEXT:    Successor(s): bb6
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block
@@ -1404,9 +1398,8 @@ define void @uniform_branch_after_varying_branch_no_phi(ptr %a, i1 %u1) {
 ; CHECK-NEXT:    Successor(s): bb2, bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb2:
-; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = logical-and vp<[[VP4]]>, ir<%u1>
-; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, vp<[[VP5]]>
-; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, vp<[[VP5]]>
+; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, vp<[[VP4]]>
 ; CHECK-NEXT:    Successor(s): bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
@@ -1583,9 +1576,8 @@ define void @uniform_branch_after_varying_branch_more_blocks_no_phi(ptr %a, i1 %
 ; CHECK-NEXT:    Successor(s): bb3, bb2
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
-; CHECK-NEXT:      EMIT vp<[[VP7:%[0-9]+]]> = logical-and vp<[[VP4]]>, ir<%u1>
-; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, vp<[[VP7]]>
-; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, vp<[[VP7]]>
+; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, vp<[[VP4]]>
 ; CHECK-NEXT:    Successor(s): bb4
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
@@ -1604,10 +1596,8 @@ define void @uniform_branch_after_varying_branch_more_blocks_no_phi(ptr %a, i1 %
 ; CHECK-NEXT:    No successors
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb2:
-; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = not ir<%u1>
-; CHECK-NEXT:      EMIT vp<[[VP6:%[0-9]+]]> = logical-and vp<[[VP4]]>, vp<[[VP5]]>
-; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, vp<[[VP6]]>
-; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, vp<[[VP6]]>
+; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, vp<[[VP4]]>
 ; CHECK-NEXT:    Successor(s): bb4
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block
@@ -1779,9 +1769,8 @@ define void @uniform_branch_after_varying_branch_more_blocks_mirrored_no_phi(ptr
 ; CHECK-NEXT:    Successor(s): bb4, bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
-; CHECK-NEXT:      EMIT vp<[[VP7:%[0-9]+]]> = logical-and ir<%v0>, ir<%u2>
-; CHECK-NEXT:      EMIT ir<%add4> = add ir<%iv>, ir<4>, vp<[[VP7]]>
-; CHECK-NEXT:      EMIT store ir<%add4>, ir<%gep>, vp<[[VP7]]>
+; CHECK-NEXT:      EMIT ir<%add4> = add ir<%iv>, ir<4>, ir<%v0>
+; CHECK-NEXT:      EMIT store ir<%add4>, ir<%gep>, ir<%v0>
 ; CHECK-NEXT:    Successor(s): bb5
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb5:
@@ -1795,10 +1784,8 @@ define void @uniform_branch_after_varying_branch_more_blocks_mirrored_no_phi(ptr
 ; CHECK-NEXT:    No successors
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
-; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = not ir<%u2>
-; CHECK-NEXT:      EMIT vp<[[VP6:%[0-9]+]]> = logical-and ir<%v0>, vp<[[VP5]]>
-; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, vp<[[VP6]]>
-; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, vp<[[VP6]]>
+; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, ir<%v0>
+; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, ir<%v0>
 ; CHECK-NEXT:    Successor(s): bb5
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block
@@ -2823,15 +2810,14 @@ define void @uniform_branch_shared_join_with_varying_no_phi(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    Successor(s): bb2, bb1
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb2:
-; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>, ir<%u0>
-; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>, ir<%u0>
-; CHECK-NEXT:      EMIT ir<%v2> = icmp sle ir<%iv>, ir<2>, ir<%u0>
+; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<2>
+; CHECK-NEXT:      EMIT store ir<%add2>, ir<%gep>
+; CHECK-NEXT:      EMIT ir<%v2> = icmp sle ir<%iv>, ir<2>
 ; CHECK-NEXT:    Successor(s): bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
-; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = logical-and ir<%u0>, ir<%v2>
-; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, vp<[[VP5]]>
-; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, vp<[[VP5]]>
+; CHECK-NEXT:      EMIT ir<%add3> = add ir<%iv>, ir<3>, ir<%v2>
+; CHECK-NEXT:      EMIT store ir<%add3>, ir<%gep>, ir<%v2>
 ; CHECK-NEXT:    Successor(s): bb4
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
@@ -2842,9 +2828,8 @@ define void @uniform_branch_shared_join_with_varying_no_phi(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    No successors
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb1:
-; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = not ir<%u0>
-; CHECK-NEXT:      EMIT ir<%add1> = add ir<%iv>, ir<1>, vp<[[VP4]]>
-; CHECK-NEXT:      EMIT store ir<%add1>, ir<%gep>, vp<[[VP4]]>
+; CHECK-NEXT:      EMIT ir<%add1> = add ir<%iv>, ir<1>
+; CHECK-NEXT:      EMIT store ir<%add1>, ir<%gep>
 ; CHECK-NEXT:    Successor(s): bb4
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block

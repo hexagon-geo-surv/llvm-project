@@ -259,6 +259,10 @@ bool VPPredicator::shouldPreserveTerminator(VPBasicBlock *VPBB) {
       return False("Bailing out due to successors not being independent");
   }
 
+  // FIXME: Only one of the two checks below should remain in the end.
+  if (!IPostDom->phis().empty())
+    return False("Phis at reconvergence");
+
   if (any_of(*IPostDom, IsaPred<VPBlendRecipe>))
     return False("Blends at reconvergence");
 
@@ -327,7 +331,10 @@ void VPPredicator::createBlockInMask(VPBasicBlock *VPBB) {
   // This is the block mask. We OR all unique incoming edges.
   for (auto *Predecessor : SetVector<VPBlockBase *>(
            VPBB->getPredecessors().begin(), VPBB->getPredecessors().end())) {
-    VPValue *EdgeMask = createEdgeMask(cast<VPBasicBlock>(Predecessor), VPBB);
+    auto *Pred = cast<VPBasicBlock>(Predecessor);
+    VPValue *EdgeMask = shouldPreserveTerminator(Pred)
+                            ? getBlockInMask(Pred)
+                            : createEdgeMask(Pred, VPBB);
     if (!EdgeMask) { // Mask of predecessor is all-one so mask of block is
                      // too.
       setBlockInMask(VPBB, EdgeMask);
@@ -473,6 +480,7 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
   for (VPRecipeBase &R : VPBB->phis())
     Phis.push_back(cast<VPPhi>(&R));
   for (VPPhi *PhiR : Phis) {
+    LLVM_DEBUG(dbgs() << "Converting " << *PhiR << " to blend\n");
     // The non-header Phi is converted into a Blend recipe below,
     // so we don't have to worry about the insertion order and we can just use
     // the builder. At this point we generate the predication tree. There may
@@ -483,6 +491,9 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
       return !match(V, m_Poison());
     });
     if (all_equal(NotPoison)) {
+      LLVM_DEBUG(dbgs() << "  all incoming values are the same or poison, "
+                           "replacing with single value "
+                        << PhiR->getIncomingValue(0) << "\n");
       PhiR->replaceAllUsesWith(NotPoison.empty() ? PhiR->getIncomingValue(0)
                                                  : *NotPoison.begin());
       PhiR->eraseFromParent();
@@ -517,6 +528,7 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
     auto *Blend =
         new VPBlendRecipe(IRPhi, OperandsWithMask, *PhiR, PhiR->getDebugLoc());
     Builder.insert(Blend);
+    LLVM_DEBUG(dbgs() << "  blend: " << *Blend << "\n");
     PhiR->replaceAllUsesWith(Blend);
     PhiR->eraseFromParent();
   }
