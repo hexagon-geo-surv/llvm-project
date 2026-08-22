@@ -176,9 +176,6 @@ GCNSubtarget &GCNSubtarget::initializeSubtargetDependencies(const Triple &TT,
   if (MaxWavesPerEU == 0)
     MaxWavesPerEU = 10;
 
-  if (HalfSIMDs == 0)
-    HalfSIMDs = 4;
-
   if (FlatOffsetBitWidth == 0)
     FlatOffsetBitWidth = 13;
 
@@ -250,8 +247,8 @@ GCNSubtarget::GCNSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
   LLVM_DEBUG(dbgs() << "sramecc setting for subtarget: "
                     << TargetID.getSramEccSetting() << '\n');
 
-  WorkGroupSIMDs =
-      AMDGPU::isFullSIMDMode(*this) ? AMDGPU::FullSIMDs : HalfSIMDs;
+  WorkGroupSIMDs = AMDGPU::getWorkGroupSIMDs(TargetID.getGPUKind(),
+                                             AMDGPU::isFullSIMDMode(*this));
 
   TSInfo = std::make_unique<AMDGPUSelectionDAGInfo>();
 

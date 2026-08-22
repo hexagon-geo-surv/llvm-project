@@ -42,7 +42,6 @@ struct GPUInfo {
   IsaVersion Version;
   StringTable::Offset FamilyName;
   uint8_t MaxWavesPerEU;
-  uint8_t HalfSIMDs;
 };
 
 // Per-GPU data for the R600 GPUKinds.
@@ -426,9 +425,9 @@ unsigned AMDGPU::getSGPRAllocGranule(Triple::SubArchType SubArch) {
 
 unsigned AMDGPU::getWorkGroupSIMDs(GPUKind AK, bool FullSIMDMode) {
   const GPUInfo *Info = getAMDGPUInfo(AK);
-  if (FullSIMDMode || !Info)
-    return FullSIMDs;
-  return Info->HalfSIMDs;
+  if (FullSIMDMode || !Info || !(Info->ArchFeatures & FEATURE_WGP))
+    return 4;
+  return 2;
 }
 
 unsigned AMDGPU::getWorkGroupSIMDs(Triple::SubArchType SubArch,

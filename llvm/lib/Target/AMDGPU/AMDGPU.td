@@ -426,16 +426,6 @@ def FeatureMaxWavesPerEU10 : SubtargetFeatureMaxWavesPerEU<10>;
 def FeatureMaxWavesPerEU16 : SubtargetFeatureMaxWavesPerEU<16>;
 def FeatureMaxWavesPerEU20 : SubtargetFeatureMaxWavesPerEU<20>;
 
-class SubtargetFeatureHalfSIMDs <int Value> : SubtargetFeature <
-  "half-simds-"#Value,
-  "HalfSIMDs",
-  !cast<string>(Value),
-  "Number of SIMDs a work-group runs on outside full-SIMD mode."
->;
-
-def FeatureHalfSIMDs2 : SubtargetFeatureHalfSIMDs<2>;
-def FeatureHalfSIMDs4 : SubtargetFeatureHalfSIMDs<4>;
-
 class SubtargetFeatureInstCacheLineSize <int Value> : SubtargetFeature <
   "instcachelinesize"#Value,
   "InstCacheLineSize",
@@ -1607,7 +1597,7 @@ def FeatureSouthernIslands : GCNSubtargetFeatureGeneration<"SOUTHERN_ISLANDS",
   FeatureSadInsts, FeatureMsadInsts, FeatureMqsadPkInsts,
   FeatureCvtPkNormVOP2Insts, FeatureDX10ClampAndIEEEMode, FeatureMTBUFInsts,
   FeatureFormattedMUBUFInsts,
-  FeatureMaxWavesPerEU10, FeatureHalfSIMDs4
+  FeatureMaxWavesPerEU10,
   ]
 >;
 
@@ -1626,7 +1616,7 @@ def FeatureSeaIslands : GCNSubtargetFeatureGeneration<"SEA_ISLANDS",
   FeatureMqsadInsts, FeatureCvtPkNormVOP2Insts,
   FeatureDX10ClampAndIEEEMode, FeatureInstCacheLineSize64,
   FeatureMTBUFInsts, FeatureFormattedMUBUFInsts,
-  FeatureMaxWavesPerEU10, FeatureHalfSIMDs4
+  FeatureMaxWavesPerEU10,
   ]
 >;
 
@@ -1648,7 +1638,7 @@ def FeatureVolcanicIslands : GCNSubtargetFeatureGeneration<"VOLCANIC_ISLANDS",
    FeatureMqsadPkInsts, FeatureMqsadInsts,
    FeatureCvtPkNormVOP2Insts, FeatureDX10ClampAndIEEEMode,
    FeatureInstCacheLineSize64, FeatureMTBUFInsts, FeatureFormattedMUBUFInsts,
-   FeatureMaxWavesPerEU10, FeatureHalfSIMDs4
+   FeatureMaxWavesPerEU10,
   ]
 >;
 
@@ -1673,7 +1663,6 @@ def FeatureGFX9 : GCNSubtargetFeatureGeneration<"GFX9",
    FeatureCvtNormInsts, FeatureCvtPkNormVOP2Insts,
    FeatureCvtPkNormVOP3Insts, FeatureDX10ClampAndIEEEMode,
    FeatureInstCacheLineSize64, FeatureMTBUFInsts, FeatureFormattedMUBUFInsts,
-   FeatureHalfSIMDs4
   ]
 >;
 
@@ -1706,7 +1695,6 @@ def FeatureGFX10 : GCNSubtargetFeatureGeneration<"GFX10",
    FeatureCvtNormInsts, FeatureCvtPkNormVOP2Insts,
    FeatureCvtPkNormVOP3Insts, FeatureDX10ClampAndIEEEMode, FeatureFlatOffsetBits12,
    FeatureInstCacheLineSize64, FeatureMTBUFInsts, FeatureFormattedMUBUFInsts,
-   FeatureHalfSIMDs2
   ]
 >;
 
@@ -1738,7 +1726,7 @@ def FeatureGFX11 : GCNSubtargetFeatureGeneration<"GFX11",
    FeatureMqsadInsts, FeatureCvtNormInsts,
    FeatureCvtPkNormVOP2Insts, FeatureCvtPkNormVOP3Insts,
    FeatureInstCacheLineSize128, FeatureMTBUFInsts, FeatureFormattedMUBUFInsts,
-   FeatureMaxWavesPerEU16, FeatureHalfSIMDs2
+   FeatureMaxWavesPerEU16,
   ]
 >;
 
@@ -1798,7 +1786,7 @@ def FeatureGFX13 : GCNSubtargetFeatureGeneration<"GFX13",
    FeatureAgentScopeFineGrainedRemoteMemoryAtomics, FeatureFlatOffsetBits24,
    FeatureFlatSignedOffset, FeatureInstCacheLineSize128,
    FeatureMTBUFInsts, FeatureFormattedMUBUFInsts,
-   FeatureMaxWavesPerEU16, FeatureHalfSIMDs2
+   FeatureMaxWavesPerEU16,
   ]
 >;
 //===----------------------------------------------------------------------===//
@@ -2327,7 +2315,6 @@ def FeatureISAVersion12 : FeatureSet<
    FeatureMTBUFInsts,
    FeatureFormattedMUBUFInsts,
    FeatureDataCacheLineSize128,
-   FeatureHalfSIMDs2
    ]>;
 
 def FeatureISAVersion12_50_Common : FeatureSet<
@@ -2421,7 +2408,6 @@ def FeatureISAVersion12_50_Common : FeatureSet<
    FeatureRealTrue16Insts,
    FeatureVMovB64Inst,
    FeatureVMulU64Inst,
-   FeatureHalfSIMDs4
 ]>;
 
 def FeatureISAVersion12_50 : FeatureSet<
