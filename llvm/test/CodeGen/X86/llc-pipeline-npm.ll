@@ -139,7 +139,7 @@
 ; O2-NEXT:     machine-sink
 ; O2-NEXT:     peephole-opt
 ; O2-NEXT:     dead-mi-elimination
-; O2-NEXT:     LiveRangeShrinkPass
+; O2-NEXT:     lrshrink
 ; O2-NEXT:     x86-fixup-setcc
 ; O2-NEXT:     x86-cf-opt
 ; O2-NEXT:     x86-avoid-sfb
@@ -342,7 +342,7 @@
 ; O3-WINDOWS-NEXT:     machine-sink
 ; O3-WINDOWS-NEXT:     peephole-opt
 ; O3-WINDOWS-NEXT:     dead-mi-elimination
-; O3-WINDOWS-NEXT:     LiveRangeShrinkPass
+; O3-WINDOWS-NEXT:     lrshrink
 ; O3-WINDOWS-NEXT:     x86-fixup-setcc
 ; O3-WINDOWS-NEXT:     x86-cf-opt
 ; O3-WINDOWS-NEXT:     x86-avoid-sfb

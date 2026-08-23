@@ -70,7 +70,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeLiveDebugValuesLegacyPass(Registry);
   initializeLiveDebugVariablesWrapperLegacyPass(Registry);
   initializeLiveIntervalsWrapperPassPass(Registry);
-  initializeLiveRangeShrinkPass(Registry);
+  initializeLiveRangeShrinkLegacyPass(Registry);
   initializeLiveStacksWrapperLegacyPass(Registry);
   initializeLiveVariablesWrapperPassPass(Registry);
   initializeLocalStackSlotPassPass(Registry);

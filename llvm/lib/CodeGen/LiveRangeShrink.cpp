@@ -14,6 +14,7 @@
 ///
 ///===---------------------------------------------------------------------===//
 
+#include "llvm/CodeGen/LiveRangeShrink.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/iterator_range.h"
@@ -41,11 +42,11 @@ STATISTIC(NumInstrsHoistedToShrinkLiveRange,
 
 namespace {
 
-class LiveRangeShrink : public MachineFunctionPass {
+class LiveRangeShrinkLegacy : public MachineFunctionPass {
 public:
   static char ID;
 
-  LiveRangeShrink() : MachineFunctionPass(ID) {}
+  LiveRangeShrinkLegacy() : MachineFunctionPass(ID) {}
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
@@ -59,12 +60,12 @@ public:
 
 } // end anonymous namespace
 
-char LiveRangeShrink::ID = 0;
+char LiveRangeShrinkLegacy::ID = 0;
 
-char &llvm::LiveRangeShrinkID = LiveRangeShrink::ID;
+char &llvm::LiveRangeShrinkID = LiveRangeShrinkLegacy::ID;
 
-INITIALIZE_PASS(LiveRangeShrink, "lrshrink", "Live Range Shrink Pass", false,
-                false)
+INITIALIZE_PASS(LiveRangeShrinkLegacy, "lrshrink", "Live Range Shrink Pass",
+                false, false)
 
 using InstOrderMap = DenseMap<MachineInstr *, unsigned>;
 
@@ -115,10 +116,7 @@ static void BuildInstOrderMap(MachineBasicBlock::iterator Start,
   }
 }
 
-bool LiveRangeShrink::runOnMachineFunction(MachineFunction &MF) {
-  if (skipFunction(MF.getFunction()))
-    return false;
-
+static bool runLiveRangeShrink(MachineFunction &MF) {
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
 
@@ -260,4 +258,20 @@ bool LiveRangeShrink::runOnMachineFunction(MachineFunction &MF) {
     }
   }
   return false;
+}
+
+bool LiveRangeShrinkLegacy::runOnMachineFunction(MachineFunction &MF) {
+  if (skipFunction(MF.getFunction()))
+    return false;
+
+  return runLiveRangeShrink(MF);
+}
+
+PreservedAnalyses
+LiveRangeShrinkPass::run(MachineFunction &MF,
+                         MachineFunctionAnalysisManager &MFAM) {
+  if (!runLiveRangeShrink(MF))
+    return PreservedAnalyses::all();
+
+  return getMachineFunctionPassPreservedAnalyses().preserveSet<CFGAnalyses>();
 }

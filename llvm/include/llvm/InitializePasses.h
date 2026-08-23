@@ -164,7 +164,7 @@ LLVM_ABI void initializeGISelValueTrackingAnalysisLegacyPass(PassRegistry &);
 LLVM_ABI void initializeLiveDebugValuesLegacyPass(PassRegistry &);
 LLVM_ABI void initializeLiveDebugVariablesWrapperLegacyPass(PassRegistry &);
 LLVM_ABI void initializeLiveIntervalsWrapperPassPass(PassRegistry &);
-LLVM_ABI void initializeLiveRangeShrinkPass(PassRegistry &);
+LLVM_ABI void initializeLiveRangeShrinkLegacyPass(PassRegistry &);
 LLVM_ABI void initializeLiveRegMatrixWrapperLegacyPass(PassRegistry &);
 LLVM_ABI void initializeLiveStacksWrapperLegacyPass(PassRegistry &);
 LLVM_ABI void initializeLiveVariablesWrapperPassPass(PassRegistry &);

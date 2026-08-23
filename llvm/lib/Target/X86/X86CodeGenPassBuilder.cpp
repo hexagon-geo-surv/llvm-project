@@ -23,6 +23,7 @@
 #include "llvm/CodeGen/InterleavedAccess.h"
 #include "llvm/CodeGen/JMCInstrumenter.h"
 #include "llvm/CodeGen/KCFI.h"
+#include "llvm/CodeGen/LiveRangeShrink.h"
 #include "llvm/CodeGen/MachineCombiner.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCStreamer.h"
