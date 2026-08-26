@@ -93,9 +93,15 @@ class VPPredicator {
       DenseMap<std::pair<const VPBasicBlock *, const VPBasicBlock *>,
                VPValue *>;
   using BlockMaskCacheTy = DenseMap<const VPBasicBlock *, VPValue *>;
+  using BlendTermTy = std::pair<VPValue *, VPBasicBlock *>;
   EdgeMaskCacheTy EdgeMaskCache;
 
   BlockMaskCacheTy BlockMaskCache;
+
+  /// Pre-linearization blend terms, indexed by block and phi.
+  SmallVector</* BlockIdx -> */ DenseMap</* Phi -> Terms */ VPPhi *,
+                                         SmallVector<BlendTermTy>>>
+      BlendTerms;
 
   /// Create an edge mask for every destination of cases and/or default.
   void createSwitchEdgeMasks(const VPInstruction *SI);
@@ -142,8 +148,6 @@ class VPPredicator {
     return VPBB->getFirstNonPhi();
   }
 
-  using BlendTermTy = std::pair<VPValue *, VPBasicBlock *>;
-
   /// Return true if every path starting at \p Root reaches one of \p Blocks.
   /// All blocks in \p Blocks are expected to be dominated by \p Root.
   bool
@@ -159,7 +163,8 @@ public:
   VPPredicator(VPlan &Plan)
       : Plan(Plan), VPDT(Plan), VPPDT(Plan),
         BlocksInCompactRPOTOrder(
-            Plan.getVectorLoopRegion()->getEntryBasicBlock(), VPDT) {}
+            Plan.getVectorLoopRegion()->getEntryBasicBlock(), VPDT),
+        BlendTerms(BlocksInCompactRPOTOrder.size()) {}
 
   /// Returns the *entry* mask for \p VPBB.
   VPValue *getBlockInMask(const VPBasicBlock *VPBB) const {
@@ -259,9 +264,16 @@ bool VPPredicator::shouldPreserveTerminator(VPBasicBlock *VPBB) {
       return False("Bailing out due to successors not being independent");
   }
 
-  // FIXME: Only one of the two checks below should remain in the end.
-  if (!IPostDom->phis().empty())
-    return False("Phis at reconvergence");
+  // This is equivalent to checking for VPBlendRecipes after phi conversion:
+  // only non-trivial phis are converted to blends.
+  if (any_of(IPostDom->phis(), [](VPRecipeBase &R) {
+        auto *Phi = cast<VPPhi>(&R);
+        auto NotPoison =
+            make_filter_range(Phi->incoming_values(),
+                              [](VPValue *V) { return !match(V, m_Poison()); });
+        return !all_equal(NotPoison);
+      }))
+    return False("Non-trivial phi at reconvergence");
 
   if (any_of(*IPostDom, IsaPred<VPBlendRecipe>))
     return False("Blends at reconvergence");
@@ -500,9 +512,11 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
       continue;
     }
 
-    auto Terms = computeBlendTerms(PhiR);
     SmallVector<VPBasicBlock *> MaskBlocks;
-    for (auto [_, ConstMaskBlock] : Terms)
+    auto &BlockBlendTerms = BlendTerms[BlocksInCompactRPOTOrder.getIndex(VPBB)];
+    auto Terms = BlockBlendTerms.find(PhiR);
+    assert(Terms != BlockBlendTerms.end() && "Missing cached blend terms");
+    for (auto [_, ConstMaskBlock] : Terms->second)
       MaskBlocks.push_back(const_cast<VPBasicBlock *>(ConstMaskBlock));
 
     // The in-mask of the common dominator is true on all paths from an
@@ -513,7 +527,7 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
     VPValue *CommonIncomingMask = getBlockInMask(CommonIncomingDom);
 
     SmallVector<VPValue *, 2> OperandsWithMask;
-    for (auto [V, ConstMaskBlock] : Terms) {
+    for (auto [V, ConstMaskBlock] : Terms->second) {
       auto *MaskBlock = const_cast<VPBasicBlock *>(ConstMaskBlock);
       VPValue *Mask = getBlockInMask(MaskBlock);
       VPValue *RemainingMask = nullptr;
@@ -557,9 +571,19 @@ void VPPredicator::run() {
     }
   }
 
-  for (VPBlockBase *VPBB : reverse(BlocksInCompactRPOTOrder))
-    if (VPBB != Header)
-      convertPhisToBlends(cast<VPBasicBlock>(VPBB));
+  // Cache blend terms before linearization. Computing them requires the
+  // original phi predecessor mappings and CFG successor relation, both of
+  // which are rewritten below.
+  for (VPBlockBase *VPB : reverse(BlocksInCompactRPOTOrder)) {
+    if (VPB == Header)
+      continue;
+    auto *VPBB = cast<VPBasicBlock>(VPB);
+    auto &Terms = BlendTerms[BlocksInCompactRPOTOrder.getIndex(VPBB)];
+    for (VPRecipeBase &R : VPBB->phis()) {
+      auto *Phi = cast<VPPhi>(&R);
+      Terms[Phi] = computeBlendTerms(Phi);
+    }
+  }
 
   using DeferredSuccessorsTy = SmallPtrSet<VPBlockBase *, 4>;
   DenseMap<VPBlockBase *, DeferredSuccessorsTy> DeferredMap;
@@ -662,6 +686,10 @@ void VPPredicator::run() {
       }
     }
   }
+
+  for (VPBlockBase *VPBB : reverse(BlocksInCompactRPOTOrder))
+    if (VPBB != Header)
+      convertPhisToBlends(cast<VPBasicBlock>(VPBB));
 }
 
 void VPlanTransforms::introduceMasksAndLinearize(VPlan &Plan) {
