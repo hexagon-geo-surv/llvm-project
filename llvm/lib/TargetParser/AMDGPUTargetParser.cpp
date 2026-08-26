@@ -43,6 +43,7 @@ struct GPUInfo {
   StringTable::Offset FamilyName;
   StringTable::Offset BaseName; // The canonical device name for a variant.
   uint8_t MaxWavesPerEU;
+  uint8_t LDSBankCount;
 };
 
 // Per-GPU data for the R600 GPUKinds.
@@ -428,6 +429,15 @@ unsigned AMDGPU::getSGPRAllocGranule(Triple::SubArchType SubArch) {
   if (Version.Major >= 8)
     return 16;
   return 8;
+}
+
+unsigned AMDGPU::getLDSBankCount(GPUKind AK) {
+  const GPUInfo *Info = getAMDGPUInfo(AK);
+  return Info ? Info->LDSBankCount : 32;
+}
+
+unsigned AMDGPU::getLDSBankCount(Triple::SubArchType SubArch) {
+  return getLDSBankCount(getGPUKindFromSubArch(SubArch));
 }
 
 unsigned AMDGPU::getMaxWavesPerEU(GPUKind AK) {
