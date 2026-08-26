@@ -1688,6 +1688,8 @@ public:
 };
 
 struct LLVM_ABI_FOR_TEST VPPhi : public VPInstruction, public VPPhiAccessors {
+  bool IsSSAReconstructionPhi = false;
+
   VPPhi(ArrayRef<VPValue *> Operands, const VPIRFlags &Flags, DebugLoc DL,
         const Twine &Name = "", Type *ResultTy = nullptr)
       : VPInstruction(Instruction::PHI, Operands, Flags, {}, DL, Name,
@@ -1711,8 +1713,12 @@ struct LLVM_ABI_FOR_TEST VPPhi : public VPInstruction, public VPPhiAccessors {
   VPPhi *clone() override {
     auto *PhiR = new VPPhi(operands(), *this, getDebugLoc(), getName());
     PhiR->setUnderlyingValue(getUnderlyingValue());
+    PhiR->IsSSAReconstructionPhi = IsSSAReconstructionPhi;
     return PhiR;
   }
+
+  void markAsSSAReconstructionPhi() { IsSSAReconstructionPhi = true; }
+  bool isSSAReconstructionPhi() const { return IsSSAReconstructionPhi; }
 
   void execute(VPTransformState &State) override;
 

@@ -306,6 +306,11 @@ Value *VPTransformState::get(const VPValue *Def, const VPLane &Lane) {
     return VecPart;
   }
   // TODO: Cache created scalar values.
+  std::optional<IRBuilderBase::InsertPointGuard> Guard;
+  if (requiresLocalImplicitConversions()) {
+    Guard.emplace(Builder);
+    setInsertPointForImplicitConversion(Def, VecPart);
+  }
   Value *LaneV = Lane.getAsRuntimeExpr(Builder, VF);
   auto *Extract = Builder.CreateExtractElement(VecPart, LaneV);
   // set(Def, Extract, Instance);
@@ -340,15 +345,41 @@ Value *VPTransformState::get(const VPValue *Def, bool NeedsScalar) {
   Value *ScalarValue = get(Def, VPLane(0));
   VPLane LastLane = VPLane::getLastLaneForVF(VF);
   IRBuilderBase::InsertPointGuard Guard(Builder);
-  if (auto *LastInst = dyn_cast<Instruction>(get(Def, LastLane)))
+  if (requiresLocalImplicitConversions()) {
+    setInsertPointForImplicitConversion(Def, get(Def, LastLane));
+  } else if (auto *LastInst = dyn_cast<Instruction>(get(Def, LastLane))) {
     // Set the insert point after the last scalarized instruction. This
     // ensures the insertelement sequence will directly follow the scalar
     // definitions.
     if (auto InsertPt = LastInst->getInsertionPointAfterDef())
       Builder.SetInsertPoint(*InsertPt);
+  }
   Value *VectorValue = GetBroadcastInstrs(ScalarValue);
   set(Def, VectorValue);
   return VectorValue;
+}
+
+bool VPTransformState::requiresLocalImplicitConversions() const {
+  VPBasicBlock *Current = CFG.PrevVPBB;
+  return Current && any_of(Current->phis(), [](VPRecipeBase &R) {
+           auto *Phi = dyn_cast<VPPhi>(&R);
+           return Phi && Phi->isSSAReconstructionPhi();
+         });
+}
+
+void VPTransformState::setInsertPointForImplicitConversion(const VPValue *Def,
+                                                           Value *V) {
+  auto *DefR = Def->getDefiningRecipe();
+  if (DefR && !isa<VPIRInstruction>(DefR)) {
+    if (auto *I = dyn_cast<Instruction>(V)) {
+      if (auto InsertPt = I->getInsertionPointAfterDef()) {
+        Builder.SetInsertPoint(*InsertPt);
+        return;
+      }
+    }
+  }
+
+  Builder.SetInsertPoint(CFG.VectorPreHeader->getTerminator());
 }
 
 void VPTransformState::setDebugLocFrom(DebugLoc DL) {
@@ -966,6 +997,7 @@ void VPlan::execute(VPTransformState *State) {
 
   // Disconnect VectorPreHeader from ExitBB in both the CFG and DT.
   BasicBlock *VectorPreHeader = State->CFG.PrevBB;
+  State->CFG.VectorPreHeader = VectorPreHeader;
   cast<UncondBrInst>(VectorPreHeader->getTerminator())->setSuccessor(nullptr);
   State->CFG.DTU.applyUpdates(
       {{DominatorTree::Delete, VectorPreHeader, State->CFG.ExitBB}});

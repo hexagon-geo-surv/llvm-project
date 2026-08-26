@@ -1237,6 +1237,7 @@ VPValue *vputils::reconstructSSA(VPBasicBlock *VPBB,
   Type *Ty = Defs.begin()->second->getScalarType();
   auto *Phi = new VPPhi({}, VPIRFlags::getDefaultFlags(Instruction::PHI, Ty),
                         DebugLoc::getUnknown(), "", Ty);
+  Phi->markAsSSAReconstructionPhi();
   VPBB->insert(Phi, VPBB->getFirstNonPhi());
   Defs[VPBB] = Phi;
   for (auto *Pred : VPBB->predecessors())

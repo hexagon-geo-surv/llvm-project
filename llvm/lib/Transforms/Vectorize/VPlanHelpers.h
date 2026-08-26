@@ -275,6 +275,15 @@ struct VPTransformState {
   Value *packScalarIntoVectorizedValue(const VPValue *Def, Value *WideValue,
                                        const VPLane &Lane);
 
+  /// Return whether the current VPBB needs local placement of implicit
+  /// scalar/vector conversions.
+  bool requiresLocalImplicitConversions() const;
+
+  /// Set the insertion point for an implicit scalar/vector conversion of
+  /// \p Def. Insert after \p V when it is a generated definition, otherwise
+  /// insert in the vector preheader.
+  void setInsertPointForImplicitConversion(const VPValue *Def, Value *V);
+
   /// Add the backedge (latch) incoming value to the canonical, reduction and
   /// first-order recurrence phis in all loop headers state's plan, after
   /// the loop body has been generated.
@@ -293,6 +302,9 @@ struct VPTransformState {
     /// The last IR BasicBlock in the output IR. Set to the exit block of the
     /// vector loop.
     BasicBlock *ExitBB = nullptr;
+
+    /// The IR preheader of the vector loop.
+    BasicBlock *VectorPreHeader = nullptr;
 
     /// A mapping of each VPBasicBlock to the corresponding BasicBlock. In case
     /// of replication, maps the BasicBlock of the last replica created.
