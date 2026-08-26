@@ -18,9 +18,10 @@ define void @main(i1 %cond, ptr %arr) {
 ; CHECK-NEXT:    br label %[[BB_32]]
 ; CHECK:       [[BB_32]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP0]], %[[BB_21]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[BB_21]] ]
 ; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i32> poison, i32 [[TMP3]], i64 0
 ; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <4 x i32> [[BROADCAST_SPLATINSERT]], <4 x i32> poison, <4 x i32> zeroinitializer
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, <4 x i32> [[BROADCAST_SPLAT]], <4 x i32> splat (i32 7)
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP4]], <4 x i32> [[BROADCAST_SPLAT]], <4 x i32> splat (i32 7)
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr inbounds i32, ptr [[ARR]], i32 [[INDEX]]
 ; CHECK-NEXT:    store <4 x i32> [[PREDPHI]], ptr [[TMP1]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i32 [[INDEX]], 4

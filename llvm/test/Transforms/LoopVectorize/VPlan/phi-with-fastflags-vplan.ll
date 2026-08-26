@@ -30,9 +30,10 @@ define void @f(ptr noalias %p, i1 %c) {
 ; CHECK-NEXT:    Successor(s): latch
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    latch:
-; CHECK-NEXT:      BLEND ir<%phi> = fast ir<%x> ir<0.000000e+00>/ir<true>
-; CHECK-NEXT:      vp<[[VP6:%[0-9]+]]> = vector-pointer float, ir<%gep>, ir<1>
-; CHECK-NEXT:      WIDEN store vp<[[VP6]]>, ir<%phi>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, then ]
+; CHECK-NEXT:      BLEND ir<%phi> = fast ir<%x> ir<0.000000e+00>/vp<[[VP6]]>
+; CHECK-NEXT:      vp<[[VP7:%[0-9]+]]> = vector-pointer float, ir<%gep>, ir<1>
+; CHECK-NEXT:      WIDEN store vp<[[VP7]]>, ir<%phi>
 ; CHECK-NEXT:      EMIT vp<%index.next> = add nuw vp<[[VP3]]>, vp<[[VP1]]>
 ; CHECK-NEXT:      EMIT branch-on-count vp<%index.next>, vp<[[VP2]]>
 ; CHECK-NEXT:    No successors

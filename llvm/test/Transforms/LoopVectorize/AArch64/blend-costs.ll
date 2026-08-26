@@ -506,7 +506,8 @@ define void @only_first_lane_used(i1 %c, ptr noalias %p1, ptr noalias %p2, ptr n
 ; CHECK:       [[PRED_STORE_CONTINUE6]]:
 ; CHECK-NEXT:    [[TMP8:%.*]] = phi i64 [ [[TMP0]], %[[PRED_STORE_CONTINUE4]] ], [ poison, %[[PRED_STORE_IF3]] ]
 ; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ poison, %[[PRED_STORE_CONTINUE4]] ], [ [[TMP7]], %[[PRED_STORE_IF3]] ]
-; CHECK-NEXT:    [[TMP4:%.*]] = select i1 true, i64 [[TMP9]], i64 [[TMP8]]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i1 [ false, %[[PRED_STORE_CONTINUE4]] ], [ true, %[[PRED_STORE_IF3]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = select i1 [[TMP10]], i64 [[TMP9]], i64 [[TMP8]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr double, ptr [[P1]], i64 [[TMP4]]
 ; CHECK-NEXT:    [[WIDE_LOAD:%.*]] = load <4 x double>, ptr [[TMP1]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = fadd <4 x double> [[WIDE_LOAD]], splat (double 1.000000e+00)

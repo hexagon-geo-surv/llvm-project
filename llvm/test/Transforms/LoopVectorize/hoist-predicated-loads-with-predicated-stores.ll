@@ -1637,7 +1637,8 @@ define void @sink_stores_cse_select_dropping_fmf(ptr %dst, ptr %src, ptr %invar.
 ; CHECK:       [[VECTOR_BODY]]:
 ; CHECK-NEXT:    [[TMP8:%.*]] = phi float [ [[TMP5]], %[[ELSE10]] ], [ poison, %[[THEN11]] ]
 ; CHECK-NEXT:    [[TMP9:%.*]] = phi float [ poison, %[[ELSE10]] ], [ [[TMP4]], %[[THEN11]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, float [[TMP9]], float [[TMP8]]
+; CHECK-NEXT:    [[TMP12:%.*]] = phi i1 [ false, %[[ELSE10]] ], [ true, %[[THEN11]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP12]], float [[TMP9]], float [[TMP8]]
 ; CHECK-NEXT:    [[TMP10:%.*]] = fmul nnan float [[PREDPHI]], 5.000000e+00
 ; CHECK-NEXT:    store float [[TMP10]], ptr [[INVAR_DST]], align 4, !alias.scope [[META126:![0-9]+]], !noalias [[META119]]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2

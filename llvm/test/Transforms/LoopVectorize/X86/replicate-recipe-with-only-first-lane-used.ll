@@ -18,7 +18,8 @@ define void @replicate_udiv_with_only_first_lane_used(i32 %x, ptr %dst, i64 %d) 
 ; CHECK-NEXT:    br label %[[LOOP_LATCH1]]
 ; CHECK:       [[LOOP_LATCH1]]:
 ; CHECK-NEXT:    [[TMP0:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i64 [[TMP0]], i64 0
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP2]], i64 [[TMP0]], i64 0
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i16, ptr [[DST]], i64 [[PREDPHI]]
 ; CHECK-NEXT:    store i16 0, ptr [[TMP1]], align 2
 ; CHECK-NEXT:    store i16 0, ptr [[TMP1]], align 2

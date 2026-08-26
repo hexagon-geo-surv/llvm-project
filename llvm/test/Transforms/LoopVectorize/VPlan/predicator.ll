@@ -589,11 +589,12 @@ define void @blend_masks_triangle_phi(ptr noalias %p, i1 %c0, i1 %c1) {
 ; CHECK-NEXT:    Successor(s): bb2
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb2:
-; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = not ir<%c1>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb1 ]
+; CHECK-NEXT:      EMIT vp<[[VP5:%[0-9]+]]> = not ir<%c1>
 ; CHECK-NEXT:    Successor(s): bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
-; CHECK-NEXT:      BLEND ir<%phi> = ir<0>/ir<true> ir<1>/ir<true>
+; CHECK-NEXT:      BLEND ir<%phi> = ir<0>/vp<[[VP4]]> ir<1>/ir<true>
 ; CHECK-NEXT:      EMIT ir<%gep> = getelementptr ir<%p>, ir<%iv>
 ; CHECK-NEXT:      EMIT store ir<%phi>, ir<%gep>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add ir<%iv>, ir<1>
@@ -760,7 +761,9 @@ define void @simplifiable_blend(i1 %c1, i1 %c2, i1 %c3, i32 %x, i32 %y, ptr %p) 
 ; CHECK-NEXT:    Successor(s): latch
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    latch:
-; CHECK-NEXT:      BLEND ir<%phi> = ir<%y>/ir<true> ir<%x>/ir<true>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<true>, F ], [ ir<false>, C ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<false>, F ], [ ir<true>, C ]
+; CHECK-NEXT:      BLEND ir<%phi> = ir<%y>/vp<[[VP5]]> ir<%x>/vp<[[VP6]]>
 ; CHECK-NEXT:      EMIT ir<%gep> = getelementptr ir<%p>, ir<%iv>
 ; CHECK-NEXT:      EMIT store ir<%phi>, ir<%gep>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add ir<%iv>, ir<1>
@@ -972,7 +975,8 @@ define void @outermost_uniform_branch(ptr %a, i1 %u0) {
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<poison>, vector.body ], [ ir<%add3>, bb3 ]
-; CHECK-NEXT:      BLEND ir<%phi4> = ir<%iv>/ir<true> vp<%4>/ir<true>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb3 ]
+; CHECK-NEXT:      BLEND ir<%phi4> = ir<%iv>/ir<true> vp<%4>/vp<[[VP5]]>
 ; CHECK-NEXT:      EMIT store ir<%phi4>, ir<%a>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add nuw nsw ir<%iv>, ir<1>
 ; CHECK-NEXT:      EMIT ir<%ec> = icmp eq ir<%iv.next>, ir<128>
@@ -1133,8 +1137,10 @@ define void @outermost_uniform_branch_more_blocks(ptr %a, i1 %u0) {
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb6:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<%add1>, bb1 ], [ ir<poison>, bb5 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add5>, bb5 ]
-; CHECK-NEXT:      BLEND ir<%phi6> = vp<%5>/ir<true> vp<%6>/ir<true>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<true>, bb1 ], [ ir<false>, bb5 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add5>, bb5 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP8:%[0-9]+]]> = phi [ ir<false>, bb1 ], [ ir<true>, bb5 ]
+; CHECK-NEXT:      BLEND ir<%phi6> = vp<%5>/vp<[[VP6]]> vp<%7>/vp<[[VP8]]>
 ; CHECK-NEXT:      EMIT store ir<%phi6>, ir<%a>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add nuw nsw ir<%iv>, ir<1>
 ; CHECK-NEXT:      EMIT ir<%ec> = icmp eq ir<%iv.next>, ir<128>
@@ -2743,10 +2749,12 @@ define void @uniform_branch_shared_join_with_varying(ptr %a, i1 %u0) {
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<%add1>, bb1 ], [ ir<poison>, bb3 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add2>, bb3 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add3>, bb3 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<false>, bb1 ], [ ir<%v2>, bb3 ]
-; CHECK-NEXT:      BLEND ir<%phi4> = vp<%4>/ir<true> vp<%5>/ir<true> vp<%6>/vp<[[VP7]]>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<true>, bb1 ], [ ir<false>, bb3 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add2>, bb3 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<false>, bb1 ], [ ir<true>, bb3 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP8:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add3>, bb3 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP9:%[0-9]+]]> = phi [ ir<false>, bb1 ], [ ir<%v2>, bb3 ]
+; CHECK-NEXT:      BLEND ir<%phi4> = vp<%4>/vp<[[VP5]]> vp<%6>/vp<[[VP7]]> vp<%8>/vp<[[VP9]]>
 ; CHECK-NEXT:      EMIT store ir<%phi4>, ir<%a>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add nuw nsw ir<%iv>, ir<1>
 ; CHECK-NEXT:      EMIT ir<%ec> = icmp eq ir<%iv.next>, ir<128>

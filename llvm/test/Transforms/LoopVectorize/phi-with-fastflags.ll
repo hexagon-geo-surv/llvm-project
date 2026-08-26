@@ -16,7 +16,8 @@ define void @f(ptr noalias %p, i1 %c) {
 ; CHECK:       [[THEN1]]:
 ; CHECK-NEXT:    br label %[[LATCH2]]
 ; CHECK:       [[LATCH2]]:
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select fast i1 true, <4 x float> zeroinitializer, <4 x float> [[WIDE_LOAD]]
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[THEN1]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select fast i1 [[TMP2]], <4 x float> zeroinitializer, <4 x float> [[WIDE_LOAD]]
 ; CHECK-NEXT:    store <4 x float> [[PREDPHI]], ptr [[TMP0]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i32 [[INDEX]], 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp eq i32 [[INDEX_NEXT]], 1024

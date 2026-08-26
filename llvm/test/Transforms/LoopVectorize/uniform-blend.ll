@@ -104,10 +104,8 @@ define void @blend_chain_iv(i1 %c) {
 ; CHECK:       [[VECTOR_PH]]:
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[LOOP_NEXT_32:.*]] ]
-; CHECK-NEXT:    [[TMP3:%.*]] = add i64 [[INDEX]], 1
-; CHECK-NEXT:    [[TMP5:%.*]] = add i64 [[INDEX]], 2
-; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[INDEX]], 3
+; CHECK-NEXT:    [[INDEX1:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[LOOP_NEXT_32:.*]] ]
+; CHECK-NEXT:    [[VEC_IND:%.*]] = phi <4 x i64> [ <i64 0, i64 1, i64 2, i64 3>, %[[VECTOR_PH]] ], [ [[VEC_IND_NEXT:%.*]], %[[LOOP_NEXT_32]] ]
 ; CHECK-NEXT:    br i1 [[C]], label %[[LOOP_NEXT_21:.*]], label %[[LOOP_NEXT_32]]
 ; CHECK:       [[LOOP_NEXT_21]]:
 ; CHECK-NEXT:    br i1 [[C]], label %[[LOOP_NEXT_22:.*]], label %[[LOOP_NEXT_33:.*]]
@@ -116,6 +114,15 @@ define void @blend_chain_iv(i1 %c) {
 ; CHECK:       [[LOOP_NEXT_33]]:
 ; CHECK-NEXT:    br label %[[LOOP_NEXT_32]]
 ; CHECK:       [[LOOP_NEXT_32]]:
+; CHECK-NEXT:    [[TMP0:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ], [ [[INDEX1]], %[[LOOP_NEXT_33]] ]
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[LOOP_NEXT_33]] ]
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP0]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <4 x i64> [[BROADCAST_SPLATINSERT]], <4 x i64> poison, <4 x i32> zeroinitializer
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP1]], <4 x i64> [[BROADCAST_SPLAT]], <4 x i64> [[VEC_IND]]
+; CHECK-NEXT:    [[TMP7:%.*]] = extractelement <4 x i64> [[PREDPHI]], i64 3
+; CHECK-NEXT:    [[TMP5:%.*]] = extractelement <4 x i64> [[PREDPHI]], i64 2
+; CHECK-NEXT:    [[TMP3:%.*]] = extractelement <4 x i64> [[PREDPHI]], i64 1
+; CHECK-NEXT:    [[INDEX:%.*]] = extractelement <4 x i64> [[PREDPHI]], i64 0
 ; CHECK-NEXT:    [[TMP2:%.*]] = getelementptr inbounds [32 x i16], ptr @dst, i16 0, i64 [[INDEX]]
 ; CHECK-NEXT:    [[TMP4:%.*]] = getelementptr inbounds [32 x i16], ptr @dst, i16 0, i64 [[TMP3]]
 ; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr inbounds [32 x i16], ptr @dst, i16 0, i64 [[TMP5]]
@@ -124,7 +131,8 @@ define void @blend_chain_iv(i1 %c) {
 ; CHECK-NEXT:    store i16 0, ptr [[TMP4]], align 2
 ; CHECK-NEXT:    store i16 0, ptr [[TMP6]], align 2
 ; CHECK-NEXT:    store i16 0, ptr [[TMP8]], align 2
-; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
+; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX1]], 4
+; CHECK-NEXT:    [[VEC_IND_NEXT]] = add nuw nsw <4 x i64> [[VEC_IND]], splat (i64 4)
 ; CHECK-NEXT:    [[TMP9:%.*]] = icmp eq i64 [[INDEX_NEXT]], 32
 ; CHECK-NEXT:    br i1 [[TMP9]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP4:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:

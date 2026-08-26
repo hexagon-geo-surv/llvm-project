@@ -236,6 +236,10 @@ define void @simplifiable_blend(i1 %c1, i1 %c2, i1 %c3, i32 %x, i32 %y, ptr %p) 
 ; CHECK-NEXT:  [[ENTRY:.*:]]
 ; CHECK-NEXT:    br label %[[VECTOR_PH:.*]]
 ; CHECK:       [[VECTOR_PH]]:
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i32> poison, i32 [[X]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <4 x i32> [[BROADCAST_SPLATINSERT]], <4 x i32> poison, <4 x i32> zeroinitializer
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT1:%.*]] = insertelement <4 x i32> poison, i32 [[Y]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT2:%.*]] = shufflevector <4 x i32> [[BROADCAST_SPLATINSERT1]], <4 x i32> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
 ; CHECK-NEXT:    [[INDEX:%.*]] = phi i32 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[LATCH5:.*]] ]
@@ -249,9 +253,9 @@ define void @simplifiable_blend(i1 %c1, i1 %c2, i1 %c3, i32 %x, i32 %y, ptr %p) 
 ; CHECK:       [[A4]]:
 ; CHECK-NEXT:    br label %[[LATCH5]]
 ; CHECK:       [[LATCH5]]:
+; CHECK-NEXT:    [[TMP0:%.*]] = phi i1 [ false, %[[F4]] ], [ true, %[[A4]] ]
+; CHECK-NEXT:    [[PREDPHI7:%.*]] = select i1 [[TMP0]], <4 x i32> [[BROADCAST_SPLAT]], <4 x i32> [[BROADCAST_SPLAT2]]
 ; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i32, ptr [[P]], i32 [[INDEX]]
-; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i32> poison, i32 [[X]], i64 0
-; CHECK-NEXT:    [[PREDPHI7:%.*]] = shufflevector <4 x i32> [[BROADCAST_SPLATINSERT]], <4 x i32> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    store <4 x i32> [[PREDPHI7]], ptr [[TMP3]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i32 [[INDEX]], 4
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp eq i32 [[INDEX_NEXT]], 128
@@ -319,9 +323,10 @@ define void @outermost_uniform_branch(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    br label %[[BB42]]
 ; CHECK:       [[BB42]]:
 ; CHECK-NEXT:    [[TMP4:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ], [ [[TMP3]], %[[BB11]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[BB11]] ]
 ; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP4]], i64 0
 ; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <4 x i64> [[BROADCAST_SPLATINSERT]], <4 x i64> poison, <4 x i32> zeroinitializer
-; CHECK-NEXT:    [[PREDPHI3:%.*]] = select i1 true, <4 x i64> [[BROADCAST_SPLAT]], <4 x i64> [[VEC_IND]]
+; CHECK-NEXT:    [[PREDPHI3:%.*]] = select i1 [[TMP7]], <4 x i64> [[BROADCAST_SPLAT]], <4 x i64> [[VEC_IND]]
 ; CHECK-NEXT:    [[TMP5:%.*]] = extractelement <4 x i64> [[PREDPHI3]], i64 3
 ; CHECK-NEXT:    store i64 [[TMP5]], ptr [[A]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
@@ -472,7 +477,8 @@ define void @outermost_uniform_branch_more_blocks(ptr %a, i1 %u0) {
 ; CHECK:       [[BB63]]:
 ; CHECK-NEXT:    [[TMP5:%.*]] = phi i64 [ [[TMP7]], %[[BB11]] ], [ poison, %[[BB22]] ]
 ; CHECK-NEXT:    [[TMP6:%.*]] = phi i64 [ poison, %[[BB11]] ], [ [[TMP4]], %[[BB22]] ]
-; CHECK-NEXT:    [[PREDPHI4:%.*]] = select i1 true, i64 [[TMP6]], i64 [[TMP5]]
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i1 [ false, %[[BB11]] ], [ true, %[[BB22]] ]
+; CHECK-NEXT:    [[PREDPHI4:%.*]] = select i1 [[TMP8]], i64 [[TMP6]], i64 [[TMP5]]
 ; CHECK-NEXT:    store i64 [[PREDPHI4]], ptr [[A]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
 ; CHECK-NEXT:    [[TMP0:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
@@ -2038,13 +2044,14 @@ define void @uniform_branch_shared_join_with_varying(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    [[TMP3:%.*]] = add i64 [[INDEX]], 3
 ; CHECK-NEXT:    br label %[[BB43]]
 ; CHECK:       [[BB43]]:
-; CHECK-NEXT:    [[TMP4:%.*]] = phi i64 [ [[TMP8]], %[[BB11]] ], [ poison, %[[BB22]] ]
-; CHECK-NEXT:    [[TMP5:%.*]] = phi i64 [ poison, %[[BB11]] ], [ [[TMP1]], %[[BB22]] ]
-; CHECK-NEXT:    [[TMP6:%.*]] = phi i64 [ poison, %[[BB11]] ], [ [[TMP3]], %[[BB22]] ]
-; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[BB11]] ], [ [[TMP2]], %[[BB22]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i64 [[TMP5]], i64 [[TMP4]]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = phi i64 [ [[TMP8]], %[[BB11]] ], [ poison, %[[BB22]] ]
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i64 [ poison, %[[BB11]] ], [ [[TMP1]], %[[BB22]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[BB11]] ], [ true, %[[BB22]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ poison, %[[BB11]] ], [ [[TMP3]], %[[BB22]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i1 [ false, %[[BB11]] ], [ [[TMP2]], %[[BB22]] ]
 ; CHECK-NEXT:    [[PREDPHI4:%.*]] = select i1 [[TMP7]], i64 [[TMP6]], i64 [[PREDPHI]]
-; CHECK-NEXT:    store i64 [[PREDPHI4]], ptr [[A]], align 4
+; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 [[TMP10]], i64 [[TMP9]], i64 [[PREDPHI4]]
+; CHECK-NEXT:    store i64 [[PREDPHI5]], ptr [[A]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
 ; CHECK-NEXT:    [[TMP0:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
 ; CHECK-NEXT:    br i1 [[TMP0]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP38:![0-9]+]]

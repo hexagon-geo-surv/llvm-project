@@ -98,9 +98,10 @@ define void @test(i64 %n, ptr noalias %src0, ptr noalias %src1, ptr noalias %src
 ; NO-VP-NEXT:    br label %[[LATCH6]]
 ; NO-VP:       [[LATCH6]]:
 ; NO-VP-NEXT:    [[TMP20:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP17]], %[[LOAD_V25]] ]
+; NO-VP-NEXT:    [[TMP21:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[LOAD_V25]] ]
 ; NO-VP-NEXT:    [[BROADCAST_SPLATINSERT7:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP20]], i64 0
 ; NO-VP-NEXT:    [[BROADCAST_SPLAT8:%.*]] = shufflevector <vscale x 4 x i32> [[BROADCAST_SPLATINSERT7]], <vscale x 4 x i32> poison, <vscale x 4 x i32> zeroinitializer
-; NO-VP-NEXT:    [[PREDPHI8:%.*]] = select i1 true, <vscale x 4 x i32> [[BROADCAST_SPLAT8]], <vscale x 4 x i32> [[PREDPHI6]]
+; NO-VP-NEXT:    [[PREDPHI8:%.*]] = select i1 [[TMP21]], <vscale x 4 x i32> [[BROADCAST_SPLAT8]], <vscale x 4 x i32> [[PREDPHI6]]
 ; NO-VP-NEXT:    [[TMP18:%.*]] = getelementptr inbounds i32, ptr [[DST]], i64 [[INDEX]]
 ; NO-VP-NEXT:    store <vscale x 4 x i32> [[PREDPHI8]], ptr [[TMP18]], align 4
 ; NO-VP-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], [[TMP1]]

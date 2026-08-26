@@ -23,20 +23,21 @@ define i8 @predicated_replicate_feeding_cast(i16 %n, i1 %c1, i1 %c2, i16 %a, i8 
 ; CHECK:       [[PRED_SDIV_IF1]]:
 ; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE2]]
 ; CHECK:       [[PRED_SDIV_CONTINUE2]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ poison, %[[PRED_SDIV_CONTINUE]] ], [ [[TMP5]], %[[PRED_SDIV_IF1]] ]
-; CHECK-NEXT:    [[TMP11:%.*]] = select i1 true, i16 [[TMP6]], i16 0
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i16 [ poison, %[[PRED_SDIV_CONTINUE]] ], [ [[TMP5]], %[[PRED_SDIV_IF1]] ]
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i1 [ false, %[[PRED_SDIV_CONTINUE]] ], [ true, %[[PRED_SDIV_IF1]] ]
+; CHECK-NEXT:    [[TMP11:%.*]] = select i1 [[TMP6]], i16 [[TMP7]], i16 0
 ; CHECK-NEXT:    br i1 [[C2]], label %[[PRED_SDIV_CONTINUE6]], label %[[IF23:.*]]
 ; CHECK:       [[IF23]]:
 ; CHECK-NEXT:    [[TMP12:%.*]] = trunc i16 [[TMP11]] to i8
 ; CHECK-NEXT:    [[TMP18:%.*]] = sdiv i8 [[TMP12]], [[B]]
 ; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE6]]
 ; CHECK:       [[PRED_SDIV_CONTINUE6]]:
-; CHECK-NEXT:    [[TMP8:%.*]] = phi i8 [ poison, %[[PRED_SDIV_CONTINUE2]] ], [ [[TMP18]], %[[IF23]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = phi i8 [ poison, %[[PRED_SDIV_CONTINUE2]] ], [ [[TMP18]], %[[IF23]] ]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i32 [[INDEX]], 2
 ; CHECK-NEXT:    [[TMP21:%.*]] = icmp eq i32 [[INDEX_NEXT]], [[N_VEC]]
 ; CHECK-NEXT:    br i1 [[TMP21]], label %[[MIDDLE_BLOCK:.*]], label %[[PRED_SDIV_CONTINUE]], !llvm.loop [[LOOP0:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
-; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 true, i8 [[TMP8]], i8 0
+; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 [[TMP6]], i8 [[TMP9]], i8 0
 ; CHECK-NEXT:    [[CMP_N:%.*]] = icmp eq i32 [[TMP1]], [[N_VEC]]
 ; CHECK-NEXT:    br i1 [[CMP_N]], label %[[EXIT:.*]], label %[[SCALAR_PH]]
 ; CHECK:       [[SCALAR_PH]]:
@@ -115,20 +116,21 @@ define i8 @predicated_replicate_feeding_cast_non_uniform(i64 %n, i1 %c1, i1 %c2,
 ; CHECK-NEXT:    [[TMP5:%.*]] = sdiv i16 1, [[TMP4]]
 ; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE4]]
 ; CHECK:       [[PRED_SDIV_CONTINUE4]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ poison, %[[VECTOR_BODY]] ], [ [[TMP5]], %[[PRED_SDIV_IF]] ]
-; CHECK-NEXT:    [[TMP17:%.*]] = select i1 true, i16 [[TMP6]], i16 0
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i16 [ poison, %[[VECTOR_BODY]] ], [ [[TMP5]], %[[PRED_SDIV_IF]] ]
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[PRED_SDIV_IF]] ]
+; CHECK-NEXT:    [[TMP17:%.*]] = select i1 [[TMP6]], i16 [[TMP7]], i16 0
 ; CHECK-NEXT:    br i1 [[C2]], label %[[PRED_SDIV_CONTINUE6]], label %[[PRED_SDIV_IF5:.*]]
 ; CHECK:       [[PRED_SDIV_IF5]]:
 ; CHECK-NEXT:    [[TMP18:%.*]] = trunc i16 [[TMP17]] to i8
 ; CHECK-NEXT:    [[TMP19:%.*]] = sdiv i8 [[TMP18]], [[B]]
 ; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE6]]
 ; CHECK:       [[PRED_SDIV_CONTINUE6]]:
-; CHECK-NEXT:    [[TMP8:%.*]] = phi i8 [ poison, %[[PRED_SDIV_CONTINUE4]] ], [ [[TMP19]], %[[PRED_SDIV_IF5]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = phi i8 [ poison, %[[PRED_SDIV_CONTINUE4]] ], [ [[TMP19]], %[[PRED_SDIV_IF5]] ]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
 ; CHECK-NEXT:    [[TMP22:%.*]] = icmp eq i64 [[INDEX_NEXT]], [[N_VEC]]
 ; CHECK-NEXT:    br i1 [[TMP22]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP4:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
-; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 true, i8 [[TMP8]], i8 0
+; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 [[TMP6]], i8 [[TMP9]], i8 0
 ; CHECK-NEXT:    [[CMP_N:%.*]] = icmp eq i64 [[TMP0]], [[N_VEC]]
 ; CHECK-NEXT:    br i1 [[CMP_N]], label %[[EXIT:.*]], label %[[SCALAR_PH]]
 ; CHECK:       [[SCALAR_PH]]:
