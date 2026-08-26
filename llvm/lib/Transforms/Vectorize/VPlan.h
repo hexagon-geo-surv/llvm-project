@@ -2971,12 +2971,24 @@ public:
       : VPRecipeWithIRFlags(VPRecipeBase::VPBlendSC, Operands,
                             Operands[0]->getScalarType(), Flags, DL) {
     assert(Operands.size() >= 2 && "Expected at least two operands!");
-    assert(all_of(seq<unsigned>(0, getNumIncomingValues()),
-                  [this](unsigned I) {
-                    return getIncomingValue(I)->getScalarType() ==
-                           getScalarType();
-                  }) &&
-           "all incoming values must have the same type");
+    assert(
+        all_of(seq<unsigned>(0, getNumIncomingValues()),
+               [&, this](unsigned I) {
+                 if (getIncomingValue(I)->getScalarType() != getScalarType()) {
+                   auto V = getIncomingValue(I);
+                   dbgs() << "MISMATCH: idx " << I << " " << *V->getScalarType()
+                          << " != " << *getScalarType() << " for ";
+                   V->dump();
+                   dbgs() << "\nOperands:\n";
+                   for (auto *V : Operands) {
+                     dbgs() << "  " << *V->getScalarType() << " ";
+                     V->dump();
+                   }
+                   dbgs() << "\n";
+                 }
+                 return getIncomingValue(I)->getScalarType() == getScalarType();
+               }) &&
+        "all incoming values must have the same type");
     assert(all_of(seq<unsigned>(isNormalized(), getNumIncomingValues()),
                   [this](unsigned I) {
                     return getMask(I)->getScalarType()->isIntegerTy(1);

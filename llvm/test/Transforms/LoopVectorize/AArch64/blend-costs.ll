@@ -489,33 +489,24 @@ exit:
 define void @only_first_lane_used(i1 %c, ptr noalias %p1, ptr noalias %p2, ptr noalias %q) #0 {
 ; CHECK-LABEL: define void @only_first_lane_used(
 ; CHECK-SAME: i1 [[C:%.*]], ptr noalias [[P1:%.*]], ptr noalias [[P2:%.*]], ptr noalias [[Q:%.*]]) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:  [[ENTRY:.*:]]
-; CHECK-NEXT:    br label %[[VECTOR_PH:.*]]
-; CHECK:       [[VECTOR_PH]]:
-; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
-; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_STORE_CONTINUE6:.*]] ]
-; CHECK-NEXT:    [[TMP4:%.*]] = add i64 [[INDEX]], -1
-; CHECK-NEXT:    br i1 [[C]], label %[[PRED_STORE_IF:.*]], label %[[PRED_STORE_CONTINUE:.*]]
-; CHECK:       [[PRED_STORE_IF]]:
-; CHECK-NEXT:    store i32 0, ptr [[Q]], align 4
-; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE]]
+; CHECK-NEXT:  [[PRED_STORE_IF:.*:]]
+; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE:.*]]
 ; CHECK:       [[PRED_STORE_CONTINUE]]:
-; CHECK-NEXT:    br i1 [[C]], label %[[PRED_STORE_IF1:.*]], label %[[PRED_STORE_CONTINUE2:.*]]
-; CHECK:       [[PRED_STORE_IF1]]:
-; CHECK-NEXT:    store i32 0, ptr [[Q]], align 4
-; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE2]]
+; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE2:.*]]
 ; CHECK:       [[PRED_STORE_CONTINUE2]]:
+; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[PRED_STORE_CONTINUE]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_STORE_CONTINUE6:.*]] ]
 ; CHECK-NEXT:    br i1 [[C]], label %[[PRED_STORE_IF3:.*]], label %[[PRED_STORE_CONTINUE4:.*]]
-; CHECK:       [[PRED_STORE_IF3]]:
-; CHECK-NEXT:    store i32 0, ptr [[Q]], align 4
-; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE4]]
 ; CHECK:       [[PRED_STORE_CONTINUE4]]:
-; CHECK-NEXT:    br i1 [[C]], label %[[PRED_STORE_IF5:.*]], label %[[PRED_STORE_CONTINUE6]]
-; CHECK:       [[PRED_STORE_IF5]]:
+; CHECK-NEXT:    [[TMP0:%.*]] = add i64 [[INDEX]], -1
+; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE6]]
+; CHECK:       [[PRED_STORE_IF3]]:
+; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[INDEX]], -1
 ; CHECK-NEXT:    store i32 0, ptr [[Q]], align 4
 ; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE6]]
 ; CHECK:       [[PRED_STORE_CONTINUE6]]:
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i64 [ [[TMP0]], %[[PRED_STORE_CONTINUE4]] ], [ poison, %[[PRED_STORE_IF3]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ poison, %[[PRED_STORE_CONTINUE4]] ], [ [[TMP7]], %[[PRED_STORE_IF3]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = select i1 true, i64 [[TMP9]], i64 [[TMP8]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr double, ptr [[P1]], i64 [[TMP4]]
 ; CHECK-NEXT:    [[WIDE_LOAD:%.*]] = load <4 x double>, ptr [[TMP1]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = fadd <4 x double> [[WIDE_LOAD]], splat (double 1.000000e+00)
@@ -526,7 +517,7 @@ define void @only_first_lane_used(i1 %c, ptr noalias %p1, ptr noalias %p2, ptr n
 ; CHECK-NEXT:    store <4 x double> [[TMP6]], ptr [[TMP3]], align 8
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
 ; CHECK-NEXT:    [[TMP5:%.*]] = icmp eq i64 [[INDEX_NEXT]], 1024
-; CHECK-NEXT:    br i1 [[TMP5]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP6:![0-9]+]]
+; CHECK-NEXT:    br i1 [[TMP5]], label %[[MIDDLE_BLOCK:.*]], label %[[PRED_STORE_CONTINUE2]], !llvm.loop [[LOOP6:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[EXIT]]:

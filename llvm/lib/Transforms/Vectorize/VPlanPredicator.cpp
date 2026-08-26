@@ -83,9 +83,14 @@ class VPPredicator {
   /// Post-dominator tree for the VPlan.
   VPPostDominatorTree VPPDT;
 
+  DenseMap<VPValue *, DenseMap<VPBasicBlock *, VPValue *>>
+      SSAReconstructionDefsMap;
+
   // Scan the body of the loop in a topological order to visit each basic
   // block after having visited its predecessor basic blocks.
   CompactRPOT BlocksInCompactRPOTOrder;
+
+  bool DisablePartialLinearization = false;
 
   /// When we if-convert we need to create edge masks. We have to cache values
   /// so that we don't end up with exponential recursion/IR.
@@ -119,6 +124,7 @@ class VPPredicator {
   /// Create a logical-or, factoring out a common header mask if present.
   VPValue *createMaskOr(VPValue *LHS, VPValue *RHS, DebugLoc DL);
 
+  void fixSSA(VPRecipeBase *U, VPValue *V, bool IsMask);
   bool shouldPreserveTerminator(VPBasicBlock *VPBB);
 
   /// Record \p Mask as the *entry* mask of \p VPBB, which is expected to not
@@ -164,7 +170,17 @@ public:
       : Plan(Plan), VPDT(Plan), VPPDT(Plan),
         BlocksInCompactRPOTOrder(
             Plan.getVectorLoopRegion()->getEntryBasicBlock(), VPDT),
-        BlendTerms(BlocksInCompactRPOTOrder.size()) {}
+        BlendTerms(BlocksInCompactRPOTOrder.size()) {
+    if (any_of(Plan.getVectorLoopRegion()->getEntryBasicBlock()->phis(),
+               IsaPred<VPReductionPHIRecipe>)) {
+      // TODO: `LoopVectorizationPlanner::addReductionResultComputation` needs
+      // fixes.
+      LLVM_DEBUG(
+          dbgs()
+          << "Partial linearization disabled due to reductions present\n");
+      DisablePartialLinearization = true;
+    }
+  }
 
   /// Returns the *entry* mask for \p VPBB.
   VPValue *getBlockInMask(const VPBasicBlock *VPBB) const {
@@ -218,6 +234,33 @@ VPValue *VPPredicator::createMaskOr(VPValue *LHS, VPValue *RHS, DebugLoc DL) {
       HeaderMask, Builder.createOr(LHSRemainder, RHSRemainder, DL), DL);
 }
 
+void VPPredicator::fixSSA(VPRecipeBase *U, VPValue *V, bool IsMask) {
+  auto *RecipeValue = dyn_cast<VPRecipeValue>(V);
+  if (!RecipeValue)
+    return;
+
+  auto &SSADefs = SSAReconstructionDefsMap[RecipeValue];
+  VPBasicBlock *DefBB = RecipeValue->getDefiningRecipe()->getParent();
+  SSADefs[DefBB] = RecipeValue;
+  VPBasicBlock *Header = Plan.getVectorLoopRegion()->getEntryBasicBlock();
+  if (DefBB != Header)
+    SSADefs[Header] =
+        IsMask ? Plan.getFalse() : Plan.getPoison(RecipeValue->getScalarType());
+  auto *Fixed = vputils::reconstructSSA(U->getParent(), SSADefs);
+  if (Fixed == RecipeValue)
+    return;
+
+  LLVM_DEBUG({
+    dbgs() << "SSA Fixup in  ";
+    U->dump();
+    dbgs() << "\n  replacing ";
+    V->dump();
+    dbgs() << " with ";
+    Fixed->dump();
+  });
+  U->replaceUsesOfWith(RecipeValue, Fixed);
+}
+
 bool VPPredicator::shouldPreserveTerminator(VPBasicBlock *VPBB) {
   LLVM_DEBUG(dbgs() << "Checking if can preserve the branch at the end of "
                     << VPBB->getName() << "\n");
@@ -226,6 +269,9 @@ bool VPPredicator::shouldPreserveTerminator(VPBasicBlock *VPBB) {
                       << (Reason.empty() ? Twine() : (": " + Reason)) << "\n");
     return false;
   };
+  if (DisablePartialLinearization)
+    return False("Disabled");
+
   if (VPBB->getNumSuccessors() != 2)
     return False("#Successors != 2");
   auto *Term = dyn_cast<VPInstruction>(VPBB->getTerminator());
@@ -263,20 +309,6 @@ bool VPPredicator::shouldPreserveTerminator(VPBasicBlock *VPBB) {
                  [&](auto *Succ) { return VPDT.dominates(Succ, Pred); }) != 1)
       return False("Bailing out due to successors not being independent");
   }
-
-  // This is equivalent to checking for VPBlendRecipes after phi conversion:
-  // only non-trivial phis are converted to blends.
-  if (any_of(IPostDom->phis(), [](VPRecipeBase &R) {
-        auto *Phi = cast<VPPhi>(&R);
-        auto NotPoison =
-            make_filter_range(Phi->incoming_values(),
-                              [](VPValue *V) { return !match(V, m_Poison()); });
-        return !all_equal(NotPoison);
-      }))
-    return False("Non-trivial phi at reconvergence");
-
-  if (any_of(*IPostDom, IsaPred<VPBlendRecipe>))
-    return False("Blends at reconvergence");
 
   LLVM_DEBUG(dbgs() << "...yes, can be preserved.\n");
   return true;
@@ -687,9 +719,46 @@ void VPPredicator::run() {
     }
   }
 
+  LLVM_DEBUG({
+    dbgs() << "VPlan before predicating phis:\n";
+    Plan.dump();
+  });
   for (VPBlockBase *VPBB : reverse(BlocksInCompactRPOTOrder))
     if (VPBB != Header)
       convertPhisToBlends(cast<VPBasicBlock>(VPBB));
+
+  LLVM_DEBUG({
+    dbgs() << "VPlan before SSA-fixup:\n";
+    Plan.dump();
+  });
+
+  for (VPBasicBlock *VPBB :
+       VPBlockUtils::blocksOnly<VPBasicBlock>(BlocksInCompactRPOTOrder)) {
+    for (VPRecipeBase &R : *VPBB) {
+      if (auto *Blend = dyn_cast<VPBlendRecipe>(&R)) {
+        // TODO: We can probably do better than this by performing partial
+        // blends along the path and have at most one phi per blend in a given
+        // basic block.
+        for (unsigned I = 0; I < Blend->getNumIncomingValues(); ++I) {
+          fixSSA(Blend, Blend->getIncomingValue(I), /*IsMask*/ false);
+          fixSSA(Blend, Blend->getMask(I), /*IsMask*/ true);
+        }
+      }
+      auto *I = dyn_cast<VPInstruction>(&R);
+      if (!I)
+        continue;
+
+      switch (I->getOpcode()) {
+      case VPInstruction::Not:
+      case Instruction::And:
+      case Instruction::Or: {
+        LLVM_DEBUG(dbgs() << "visiting " << *I << " for SSA fixup\n");
+        for (auto *V : I->operands())
+          fixSSA(I, V, /*IsMask*/ true);
+      }
+      }
+    }
+  }
 }
 
 void VPlanTransforms::introduceMasksAndLinearize(VPlan &Plan) {

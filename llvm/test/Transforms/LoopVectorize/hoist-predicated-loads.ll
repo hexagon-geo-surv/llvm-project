@@ -914,16 +914,27 @@ define void @hoist_predicated_load_with_chained_geps1(ptr %dst, ptr %src, i1 %co
 ; CHECK:       [[VECTOR_PH]]:
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[TMP2:%.*]] = add i64 [[INDEX]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[LOOP_LATCH5:.*]] ]
+; CHECK-NEXT:    br i1 [[COND]], label %[[THEN4:.*]], label %[[ELSE3:.*]]
+; CHECK:       [[ELSE3]]:
 ; CHECK-NEXT:    [[TMP20:%.*]] = getelementptr [11 x i16], ptr [[SRC]], i64 [[TMP2]]
 ; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr i8, ptr [[TMP20]], i64 8
-; CHECK-NEXT:    [[TMP3:%.*]] = load i16, ptr [[TMP21]], align 2, !alias.scope [[META68:![0-9]+]]
-; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
+; CHECK-NEXT:    [[TMP8:%.*]] = load i16, ptr [[TMP21]], align 2
+; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
+; CHECK:       [[THEN4]]:
+; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr [11 x i16], ptr [[SRC]], i64 [[TMP2]]
+; CHECK-NEXT:    [[TMP4:%.*]] = getelementptr i8, ptr [[TMP3]], i64 8
+; CHECK-NEXT:    [[TMP5:%.*]] = load i16, ptr [[TMP4]], align 2
+; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
+; CHECK:       [[LOOP_LATCH5]]:
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ [[TMP8]], %[[ELSE3]] ], [ poison, %[[THEN4]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i16 [ poison, %[[ELSE3]] ], [ [[TMP5]], %[[THEN4]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i16 [[TMP7]], i16 [[TMP6]]
+; CHECK-NEXT:    store i16 [[PREDPHI]], ptr [[DST]], align 2, !alias.scope [[META68:![0-9]+]], !noalias [[META71:![0-9]+]]
+; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[TMP2]], 2
 ; CHECK-NEXT:    [[TMP26:%.*]] = icmp eq i64 [[INDEX_NEXT]], 100
-; CHECK-NEXT:    br i1 [[TMP26]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP71:![0-9]+]]
+; CHECK-NEXT:    br i1 [[TMP26]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP73:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
-; CHECK-NEXT:    store i16 [[TMP3]], ptr [[DST]], align 2, !alias.scope [[META72:![0-9]+]], !noalias [[META68]]
 ; CHECK-NEXT:    br label %[[SCALAR_PH]]
 ; CHECK:       [[SCALAR_PH]]:
 ;
@@ -973,16 +984,26 @@ define void @hoist_predicated_load_with_chained_geps2(ptr %dst, ptr %src, i1 %co
 ; CHECK:       [[VECTOR_PH]]:
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[TMP2:%.*]] = add i64 [[INDEX]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[LOOP_LATCH5:.*]] ]
 ; CHECK-NEXT:    [[TMP4:%.*]] = getelementptr [11 x i16], ptr [[SRC]], i64 [[TMP2]]
+; CHECK-NEXT:    br i1 [[COND]], label %[[THEN4:.*]], label %[[ELSE3:.*]]
+; CHECK:       [[ELSE3]]:
 ; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr i8, ptr [[TMP4]], i64 8
-; CHECK-NEXT:    [[TMP3:%.*]] = load i16, ptr [[TMP21]], align 2, !alias.scope [[META75:![0-9]+]]
-; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
+; CHECK-NEXT:    [[TMP7:%.*]] = load i16, ptr [[TMP21]], align 2
+; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
+; CHECK:       [[THEN4]]:
+; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i8, ptr [[TMP4]], i64 8
+; CHECK-NEXT:    [[TMP8:%.*]] = load i16, ptr [[TMP3]], align 2
+; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
+; CHECK:       [[LOOP_LATCH5]]:
+; CHECK-NEXT:    [[TMP5:%.*]] = phi i16 [ [[TMP7]], %[[ELSE3]] ], [ poison, %[[THEN4]] ]
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ poison, %[[ELSE3]] ], [ [[TMP8]], %[[THEN4]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i16 [[TMP6]], i16 [[TMP5]]
+; CHECK-NEXT:    store i16 [[PREDPHI]], ptr [[DST]], align 2, !alias.scope [[META75:![0-9]+]], !noalias [[META78:![0-9]+]]
+; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[TMP2]], 2
 ; CHECK-NEXT:    [[TMP26:%.*]] = icmp eq i64 [[INDEX_NEXT]], 100
-; CHECK-NEXT:    br i1 [[TMP26]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP78:![0-9]+]]
+; CHECK-NEXT:    br i1 [[TMP26]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP80:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
-; CHECK-NEXT:    store i16 [[TMP3]], ptr [[DST]], align 2, !alias.scope [[META79:![0-9]+]], !noalias [[META75]]
 ; CHECK-NEXT:    br label %[[SCALAR_PH]]
 ; CHECK:       [[SCALAR_PH]]:
 ;

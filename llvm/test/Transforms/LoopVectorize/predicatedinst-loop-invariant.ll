@@ -236,14 +236,32 @@ define void @test_store_to_invariant_address_needs_mask_due_to_low_trip_count(pt
 ; CHECK:       [[VECTOR_PH]]:
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
+; CHECK-NEXT:    br label %[[LOOP_LATCH1:.*]]
+; CHECK:       [[LOOP_LATCH1]]:
+; CHECK-NEXT:    br i1 true, label %[[PRED_STORE_IF:.*]], label %[[PRED_STORE_CONTINUE:.*]]
+; CHECK:       [[PRED_STORE_IF]]:
+; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE]]
+; CHECK:       [[PRED_STORE_CONTINUE]]:
+; CHECK-NEXT:    br i1 true, label %[[PRED_STORE_IF2:.*]], label %[[PRED_STORE_CONTINUE3:.*]]
+; CHECK:       [[PRED_STORE_IF2]]:
+; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE3]]
+; CHECK:       [[PRED_STORE_CONTINUE3]]:
+; CHECK-NEXT:    br i1 true, label %[[PRED_STORE_IF4:.*]], label %[[PRED_STORE_CONTINUE5:.*]]
+; CHECK:       [[PRED_STORE_IF4]]:
+; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE5]]
+; CHECK:       [[PRED_STORE_CONTINUE5]]:
+; CHECK-NEXT:    br i1 false, label %[[PRED_STORE_IF6:.*]], label %[[MIDDLE_BLOCK:.*]]
+; CHECK:       [[PRED_STORE_IF6]]:
 ; CHECK-NEXT:    store i32 1, ptr [[DST]], align 4
-; CHECK-NEXT:    store i32 1, ptr [[DST]], align 4
-; CHECK-NEXT:    store i32 1, ptr [[DST]], align 4
-; CHECK-NEXT:    store i32 1, ptr [[DST]], align 4
-; CHECK-NEXT:    br label %[[MIDDLE_BLOCK:.*]]
+; CHECK-NEXT:    br label %[[MIDDLE_BLOCK]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[EXIT]]:
+; CHECK-NEXT:    br label %[[EXIT1:.*]]
+; CHECK:       [[EXIT1]]:
 ; CHECK-NEXT:    ret void
 ;
 entry:

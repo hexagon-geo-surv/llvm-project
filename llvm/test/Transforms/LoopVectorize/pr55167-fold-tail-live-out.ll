@@ -6,34 +6,34 @@ define i32 @test(i32 %a, i1 %c.1, i1 %c.2 ) #0 {
 ; CHECK-NEXT:  bb:
 ; CHECK-NEXT:    br label [[VECTOR_PH:%.*]]
 ; CHECK:       vector.ph:
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <2 x i1> poison, i1 [[C_2:%.*]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <2 x i1> [[BROADCAST_SPLATINSERT]], <2 x i1> poison, <2 x i32> zeroinitializer
 ; CHECK-NEXT:    [[BROADCAST_SPLATINSERT1:%.*]] = insertelement <2 x i1> poison, i1 [[C_1:%.*]], i64 0
 ; CHECK-NEXT:    [[BROADCAST_SPLAT2:%.*]] = shufflevector <2 x i1> [[BROADCAST_SPLATINSERT1]], <2 x i1> poison, <2 x i32> zeroinitializer
-; CHECK-NEXT:    [[BROADCAST_SPLATINSERT3:%.*]] = insertelement <2 x i1> poison, i1 [[C_2:%.*]], i64 0
-; CHECK-NEXT:    [[BROADCAST_SPLAT4:%.*]] = shufflevector <2 x i1> [[BROADCAST_SPLATINSERT3]], <2 x i1> poison, <2 x i32> zeroinitializer
-; CHECK-NEXT:    [[TMP6:%.*]] = xor <2 x i1> [[BROADCAST_SPLAT4]], splat (i1 true)
-; CHECK-NEXT:    [[TMP5:%.*]] = xor <2 x i1> [[BROADCAST_SPLAT2]], splat (i1 true)
-; CHECK-NEXT:    [[TMP11:%.*]] = select <2 x i1> [[TMP6]], <2 x i1> [[TMP5]], <2 x i1> zeroinitializer
+; CHECK-NEXT:    [[TMP3:%.*]] = xor <2 x i1> [[BROADCAST_SPLAT2]], splat (i1 true)
+; CHECK-NEXT:    [[TMP1:%.*]] = xor <2 x i1> [[BROADCAST_SPLAT]], splat (i1 true)
+; CHECK-NEXT:    [[TMP2:%.*]] = select <2 x i1> [[TMP3]], <2 x i1> [[TMP1]], <2 x i1> zeroinitializer
 ; CHECK-NEXT:    [[TMP4:%.*]] = xor i32 [[A:%.*]], 1
-; CHECK-NEXT:    [[BROADCAST_SPLATINSERT4:%.*]] = insertelement <2 x i32> poison, i32 [[TMP4]], i64 0
-; CHECK-NEXT:    [[TMP2:%.*]] = shufflevector <2 x i32> [[BROADCAST_SPLATINSERT4]], <2 x i32> poison, <2 x i32> zeroinitializer
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT3:%.*]] = insertelement <2 x i32> poison, i32 [[TMP4]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT4:%.*]] = shufflevector <2 x i32> [[BROADCAST_SPLATINSERT3]], <2 x i32> poison, <2 x i32> zeroinitializer
 ; CHECK-NEXT:    br label [[VECTOR_BODY:%.*]]
 ; CHECK:       vector.body:
 ; CHECK-NEXT:    [[INDEX:%.*]] = phi i32 [ 0, [[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], [[VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[VEC_IND:%.*]] = phi <2 x i32> [ <i32 6, i32 7>, [[VECTOR_PH]] ], [ [[VEC_IND_NEXT:%.*]], [[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[VEC_PHI:%.*]] = phi <2 x i32> [ <i32 35902, i32 0>, [[VECTOR_PH]] ], [ [[PREDPHI7:%.*]], [[VECTOR_BODY]] ]
+; CHECK-NEXT:    [[VEC_PHI:%.*]] = phi <2 x i32> [ <i32 35902, i32 0>, [[VECTOR_PH]] ], [ [[PREDPHI6:%.*]], [[VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[TMP0:%.*]] = add <2 x i32> [[VEC_PHI]], splat (i32 10)
-; CHECK-NEXT:    [[TMP1:%.*]] = add <2 x i32> [[TMP0]], splat (i32 20)
-; CHECK-NEXT:    [[TMP3:%.*]] = add <2 x i32> [[TMP1]], [[TMP2]]
-; CHECK-NEXT:    [[TMP7:%.*]] = extractelement <2 x i1> [[BROADCAST_SPLAT4]], i64 0
+; CHECK-NEXT:    [[TMP5:%.*]] = add <2 x i32> [[TMP0]], splat (i32 20)
+; CHECK-NEXT:    [[TMP6:%.*]] = add <2 x i32> [[TMP5]], [[BROADCAST_SPLAT4]]
+; CHECK-NEXT:    [[TMP7:%.*]] = extractelement <2 x i1> [[BROADCAST_SPLAT2]], i64 0
 ; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP7]], <2 x i32> [[VEC_PHI]], <2 x i32> [[TMP0]]
-; CHECK-NEXT:    [[PREDPHI7]] = select <2 x i1> [[TMP11]], <2 x i32> [[TMP3]], <2 x i32> [[PREDPHI]]
+; CHECK-NEXT:    [[PREDPHI6]] = select <2 x i1> [[TMP2]], <2 x i32> [[TMP6]], <2 x i32> [[PREDPHI]]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i32 [[INDEX]], 2
 ; CHECK-NEXT:    [[VEC_IND_NEXT]] = add nuw nsw <2 x i32> [[VEC_IND]], splat (i32 2)
 ; CHECK-NEXT:    [[TMP8:%.*]] = icmp eq i32 [[INDEX_NEXT]], 176
 ; CHECK-NEXT:    br i1 [[TMP8]], label [[MIDDLE_BLOCK:%.*]], label [[VECTOR_BODY]], !llvm.loop [[LOOP0:![0-9]+]]
 ; CHECK:       middle.block:
-; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 [[C_2]], <2 x i32> [[VEC_IND]], <2 x i32> splat (i32 9)
-; CHECK-NEXT:    [[TMP10:%.*]] = call i32 @llvm.vector.reduce.add.v2i32(<2 x i32> [[PREDPHI7]])
+; CHECK-NEXT:    [[PREDPHI5:%.*]] = select i1 [[C_1]], <2 x i32> [[VEC_IND]], <2 x i32> splat (i32 9)
+; CHECK-NEXT:    [[TMP10:%.*]] = call i32 @llvm.vector.reduce.add.v2i32(<2 x i32> [[PREDPHI6]])
 ; CHECK-NEXT:    [[TMP9:%.*]] = extractelement <2 x i32> [[PREDPHI5]], i64 1
 ; CHECK-NEXT:    br label [[LOOP_LATCH:%.*]]
 ; CHECK:       exit:

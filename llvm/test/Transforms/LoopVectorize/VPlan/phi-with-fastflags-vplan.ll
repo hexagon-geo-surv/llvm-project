@@ -23,7 +23,14 @@ define void @f(ptr noalias %p, i1 %c) {
 ; CHECK-NEXT:      CLONE ir<%gep> = getelementptr ir<%p>, vp<[[VP4]]>
 ; CHECK-NEXT:      vp<[[VP5:%[0-9]+]]> = vector-pointer float, ir<%gep>, ir<1>
 ; CHECK-NEXT:      WIDEN ir<%x> = load vp<[[VP5]]>
-; CHECK-NEXT:      BLEND ir<%phi> = fast ir<%x> ir<0.000000e+00>/ir<%c>
+; CHECK-NEXT:      EMIT branch-on-cond ir<%c>
+; CHECK-NEXT:    Successor(s): then, latch
+; CHECK-EMPTY:
+; CHECK-NEXT:    then:
+; CHECK-NEXT:    Successor(s): latch
+; CHECK-EMPTY:
+; CHECK-NEXT:    latch:
+; CHECK-NEXT:      BLEND ir<%phi> = fast ir<%x> ir<0.000000e+00>/ir<true>
 ; CHECK-NEXT:      vp<[[VP6:%[0-9]+]]> = vector-pointer float, ir<%gep>, ir<1>
 ; CHECK-NEXT:      WIDEN store vp<[[VP6]]>, ir<%phi>
 ; CHECK-NEXT:      EMIT vp<%index.next> = add nuw vp<[[VP3]]>, vp<[[VP1]]>

@@ -110,6 +110,10 @@ define void @blend_chain_iv(i1 %c) {
 ; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[INDEX]], 3
 ; CHECK-NEXT:    br i1 [[C]], label %[[LOOP_NEXT_21:.*]], label %[[LOOP_NEXT_32]]
 ; CHECK:       [[LOOP_NEXT_21]]:
+; CHECK-NEXT:    br i1 [[C]], label %[[LOOP_NEXT_22:.*]], label %[[LOOP_NEXT_33:.*]]
+; CHECK:       [[LOOP_NEXT_22]]:
+; CHECK-NEXT:    br label %[[LOOP_NEXT_33]]
+; CHECK:       [[LOOP_NEXT_33]]:
 ; CHECK-NEXT:    br label %[[LOOP_NEXT_32]]
 ; CHECK:       [[LOOP_NEXT_32]]:
 ; CHECK-NEXT:    [[TMP2:%.*]] = getelementptr inbounds [32 x i16], ptr @dst, i16 0, i64 [[INDEX]]

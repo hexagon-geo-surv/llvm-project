@@ -104,21 +104,15 @@ define void @masked_umax_used_by_load_address(ptr noalias %src, ptr noalias %dst
 ; CHECK-NEXT:    br label [[VECTOR_BODY:%.*]]
 ; CHECK:       vector.body:
 ; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, [[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], [[PRED_LOAD_CONTINUE2:%.*]] ]
-; CHECK-NEXT:    br i1 [[C:%.*]], label [[PRED_LOAD_IF:%.*]], label [[PRED_LOAD_CONTINUE:%.*]]
-; CHECK:       pred.load.if:
-; CHECK-NEXT:    [[TMP2:%.*]] = load i16, ptr [[TMP1]], align 2
-; CHECK-NEXT:    [[TMP3:%.*]] = insertelement <2 x i16> poison, i16 [[TMP2]], i64 0
-; CHECK-NEXT:    br label [[PRED_LOAD_CONTINUE]]
-; CHECK:       pred.load.continue:
-; CHECK-NEXT:    [[TMP4:%.*]] = phi <2 x i16> [ poison, [[VECTOR_BODY]] ], [ [[TMP3]], [[PRED_LOAD_IF]] ]
-; CHECK-NEXT:    br i1 [[C]], label [[PRED_LOAD_IF1:%.*]], label [[PRED_LOAD_CONTINUE2]]
-; CHECK:       pred.load.if1:
+; CHECK-NEXT:    br i1 [[C:%.*]], label [[PRED_LOAD_IF1:%.*]], label [[PRED_LOAD_CONTINUE2]]
+; CHECK:       then1:
 ; CHECK-NEXT:    [[TMP5:%.*]] = load i16, ptr [[TMP1]], align 2
-; CHECK-NEXT:    [[TMP6:%.*]] = insertelement <2 x i16> [[TMP4]], i16 [[TMP5]], i64 1
 ; CHECK-NEXT:    br label [[PRED_LOAD_CONTINUE2]]
-; CHECK:       pred.load.continue2:
-; CHECK-NEXT:    [[TMP7:%.*]] = phi <2 x i16> [ [[TMP4]], [[PRED_LOAD_CONTINUE]] ], [ [[TMP6]], [[PRED_LOAD_IF1]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <2 x i16> [[TMP7]], <2 x i16> zeroinitializer
+; CHECK:       loop.latch2:
+; CHECK-NEXT:    [[TMP3:%.*]] = phi i16 [ poison, [[VECTOR_BODY]] ], [ [[TMP5]], [[PRED_LOAD_IF1]] ]
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <2 x i16> poison, i16 [[TMP3]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <2 x i16> [[BROADCAST_SPLATINSERT]], <2 x i16> poison, <2 x i32> zeroinitializer
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, <2 x i16> [[BROADCAST_SPLAT]], <2 x i16> zeroinitializer
 ; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr i16, ptr [[DST:%.*]], i64 [[INDEX]]
 ; CHECK-NEXT:    store <2 x i16> [[PREDPHI]], ptr [[TMP8]], align 2
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2

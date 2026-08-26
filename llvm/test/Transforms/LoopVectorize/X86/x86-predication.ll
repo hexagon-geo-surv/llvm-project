@@ -19,28 +19,28 @@ define i32 @predicated_sdiv_masked_load(ptr %a, ptr %b, i32 %x, i1 %c) {
 ; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <2 x i1> [[BROADCAST_SPLATINSERT]], <2 x i1> poison, <2 x i32> zeroinitializer
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_SDIV_CONTINUE2:.*]] ]
-; CHECK-NEXT:    [[VEC_PHI:%.*]] = phi <2 x i32> [ zeroinitializer, %[[VECTOR_PH]] ], [ [[TMP11:%.*]], %[[PRED_SDIV_CONTINUE2]] ]
+; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_SDIV_CONTINUE3:.*]] ]
+; CHECK-NEXT:    [[VEC_PHI:%.*]] = phi <2 x i32> [ zeroinitializer, %[[VECTOR_PH]] ], [ [[TMP11:%.*]], %[[PRED_SDIV_CONTINUE3]] ]
 ; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[INDEX]]
 ; CHECK-NEXT:    [[WIDE_LOAD:%.*]] = load <2 x i32>, ptr [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i32, ptr [[B]], i64 [[INDEX]]
-; CHECK-NEXT:    [[WIDE_MASKED_LOAD:%.*]] = call <2 x i32> @llvm.masked.load.v2i32.p0(ptr align 4 [[TMP1]], <2 x i1> [[BROADCAST_SPLAT]], <2 x i32> poison)
-; CHECK-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF:.*]], label %[[PRED_SDIV_CONTINUE:.*]]
-; CHECK:       [[PRED_SDIV_IF]]:
-; CHECK-NEXT:    [[TMP2:%.*]] = extractelement <2 x i32> [[WIDE_MASKED_LOAD]], i64 0
-; CHECK-NEXT:    [[TMP3:%.*]] = sdiv i32 [[TMP2]], [[X]]
-; CHECK-NEXT:    [[TMP4:%.*]] = insertelement <2 x i32> poison, i32 [[TMP3]], i64 0
-; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE]]
-; CHECK:       [[PRED_SDIV_CONTINUE]]:
-; CHECK-NEXT:    [[TMP5:%.*]] = phi <2 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_SDIV_IF]] ]
-; CHECK-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF1:.*]], label %[[PRED_SDIV_CONTINUE2]]
+; CHECK-NEXT:    [[WIDE_LOAD2:%.*]] = call <2 x i32> @llvm.masked.load.v2i32.p0(ptr align 4 [[TMP1]], <2 x i1> [[BROADCAST_SPLAT]], <2 x i32> poison)
+; CHECK-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF1:.*]], label %[[PRED_SDIV_CONTINUE2:.*]]
 ; CHECK:       [[PRED_SDIV_IF1]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = extractelement <2 x i32> [[WIDE_MASKED_LOAD]], i64 1
+; CHECK-NEXT:    [[TMP6:%.*]] = extractelement <2 x i32> [[WIDE_LOAD2]], i64 0
 ; CHECK-NEXT:    [[TMP7:%.*]] = sdiv i32 [[TMP6]], [[X]]
-; CHECK-NEXT:    [[TMP8:%.*]] = insertelement <2 x i32> [[TMP5]], i32 [[TMP7]], i64 1
+; CHECK-NEXT:    [[TMP4:%.*]] = insertelement <2 x i32> poison, i32 [[TMP7]], i64 0
 ; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE2]]
 ; CHECK:       [[PRED_SDIV_CONTINUE2]]:
-; CHECK-NEXT:    [[TMP9:%.*]] = phi <2 x i32> [ [[TMP5]], %[[PRED_SDIV_CONTINUE]] ], [ [[TMP8]], %[[PRED_SDIV_IF1]] ]
+; CHECK-NEXT:    [[TMP5:%.*]] = phi <2 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_SDIV_IF1]] ]
+; CHECK-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF2:.*]], label %[[PRED_SDIV_CONTINUE3]]
+; CHECK:       [[PRED_SDIV_IF2]]:
+; CHECK-NEXT:    [[TMP14:%.*]] = extractelement <2 x i32> [[WIDE_LOAD2]], i64 1
+; CHECK-NEXT:    [[TMP15:%.*]] = sdiv i32 [[TMP14]], [[X]]
+; CHECK-NEXT:    [[TMP8:%.*]] = insertelement <2 x i32> [[TMP5]], i32 [[TMP15]], i64 1
+; CHECK-NEXT:    br label %[[PRED_SDIV_CONTINUE3]]
+; CHECK:       [[PRED_SDIV_CONTINUE3]]:
+; CHECK-NEXT:    [[TMP9:%.*]] = phi <2 x i32> [ [[TMP5]], %[[PRED_SDIV_CONTINUE2]] ], [ [[TMP8]], %[[PRED_SDIV_IF2]] ]
 ; CHECK-NEXT:    [[TMP10:%.*]] = add nsw <2 x i32> [[TMP9]], [[WIDE_LOAD]]
 ; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <2 x i32> [[TMP10]], <2 x i32> [[WIDE_LOAD]]
 ; CHECK-NEXT:    [[TMP11]] = add <2 x i32> [[VEC_PHI]], [[PREDPHI]]
@@ -62,31 +62,31 @@ define i32 @predicated_sdiv_masked_load(ptr %a, ptr %b, i32 %x, i1 %c) {
 ; SINK-GATHER-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <8 x i1> [[BROADCAST_SPLATINSERT]], <8 x i1> poison, <8 x i32> zeroinitializer
 ; SINK-GATHER-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; SINK-GATHER:       [[VECTOR_BODY]]:
-; SINK-GATHER-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_SDIV_CONTINUE14:.*]] ]
-; SINK-GATHER-NEXT:    [[VEC_PHI:%.*]] = phi <8 x i32> [ zeroinitializer, %[[VECTOR_PH]] ], [ [[TMP35:%.*]], %[[PRED_SDIV_CONTINUE14]] ]
+; SINK-GATHER-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_SDIV_CONTINUE15:.*]] ]
+; SINK-GATHER-NEXT:    [[VEC_PHI:%.*]] = phi <8 x i32> [ zeroinitializer, %[[VECTOR_PH]] ], [ [[TMP35:%.*]], %[[PRED_SDIV_CONTINUE15]] ]
 ; SINK-GATHER-NEXT:    [[TMP0:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[INDEX]]
 ; SINK-GATHER-NEXT:    [[WIDE_LOAD:%.*]] = load <8 x i32>, ptr [[TMP0]], align 4
 ; SINK-GATHER-NEXT:    [[TMP1:%.*]] = getelementptr i32, ptr [[B]], i64 [[INDEX]]
-; SINK-GATHER-NEXT:    [[WIDE_MASKED_LOAD:%.*]] = call <8 x i32> @llvm.masked.load.v8i32.p0(ptr align 4 [[TMP1]], <8 x i1> [[BROADCAST_SPLAT]], <8 x i32> poison)
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF:.*]], label %[[PRED_SDIV_CONTINUE:.*]]
-; SINK-GATHER:       [[PRED_SDIV_IF]]:
-; SINK-GATHER-NEXT:    [[TMP2:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 0
-; SINK-GATHER-NEXT:    [[TMP3:%.*]] = sdiv i32 [[TMP2]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP4:%.*]] = insertelement <8 x i32> poison, i32 [[TMP3]], i64 0
-; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE]]
-; SINK-GATHER:       [[PRED_SDIV_CONTINUE]]:
-; SINK-GATHER-NEXT:    [[TMP5:%.*]] = phi <8 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_SDIV_IF]] ]
+; SINK-GATHER-NEXT:    [[WIDE_LOAD2:%.*]] = call <8 x i32> @llvm.masked.load.v8i32.p0(ptr align 4 [[TMP1]], <8 x i1> [[BROADCAST_SPLAT]], <8 x i32> poison)
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF13:.*]], label %[[PRED_SDIV_CONTINUE14:.*]]
+; SINK-GATHER:       [[PRED_SDIV_IF13]]:
+; SINK-GATHER-NEXT:    [[TMP30:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 0
+; SINK-GATHER-NEXT:    [[TMP31:%.*]] = sdiv i32 [[TMP30]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP4:%.*]] = insertelement <8 x i32> poison, i32 [[TMP31]], i64 0
+; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE14]]
+; SINK-GATHER:       [[PRED_SDIV_CONTINUE14]]:
+; SINK-GATHER-NEXT:    [[TMP5:%.*]] = phi <8 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_SDIV_IF13]] ]
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF1:.*]], label %[[PRED_SDIV_CONTINUE2:.*]]
 ; SINK-GATHER:       [[PRED_SDIV_IF1]]:
-; SINK-GATHER-NEXT:    [[TMP6:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 1
+; SINK-GATHER-NEXT:    [[TMP6:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 1
 ; SINK-GATHER-NEXT:    [[TMP7:%.*]] = sdiv i32 [[TMP6]], [[X]]
 ; SINK-GATHER-NEXT:    [[TMP8:%.*]] = insertelement <8 x i32> [[TMP5]], i32 [[TMP7]], i64 1
 ; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE2]]
 ; SINK-GATHER:       [[PRED_SDIV_CONTINUE2]]:
-; SINK-GATHER-NEXT:    [[TMP9:%.*]] = phi <8 x i32> [ [[TMP5]], %[[PRED_SDIV_CONTINUE]] ], [ [[TMP8]], %[[PRED_SDIV_IF1]] ]
+; SINK-GATHER-NEXT:    [[TMP9:%.*]] = phi <8 x i32> [ [[TMP5]], %[[PRED_SDIV_CONTINUE14]] ], [ [[TMP8]], %[[PRED_SDIV_IF1]] ]
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF3:.*]], label %[[PRED_SDIV_CONTINUE4:.*]]
 ; SINK-GATHER:       [[PRED_SDIV_IF3]]:
-; SINK-GATHER-NEXT:    [[TMP10:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 2
+; SINK-GATHER-NEXT:    [[TMP10:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 2
 ; SINK-GATHER-NEXT:    [[TMP11:%.*]] = sdiv i32 [[TMP10]], [[X]]
 ; SINK-GATHER-NEXT:    [[TMP12:%.*]] = insertelement <8 x i32> [[TMP9]], i32 [[TMP11]], i64 2
 ; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE4]]
@@ -94,7 +94,7 @@ define i32 @predicated_sdiv_masked_load(ptr %a, ptr %b, i32 %x, i1 %c) {
 ; SINK-GATHER-NEXT:    [[TMP13:%.*]] = phi <8 x i32> [ [[TMP9]], %[[PRED_SDIV_CONTINUE2]] ], [ [[TMP12]], %[[PRED_SDIV_IF3]] ]
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF5:.*]], label %[[PRED_SDIV_CONTINUE6:.*]]
 ; SINK-GATHER:       [[PRED_SDIV_IF5]]:
-; SINK-GATHER-NEXT:    [[TMP14:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 3
+; SINK-GATHER-NEXT:    [[TMP14:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 3
 ; SINK-GATHER-NEXT:    [[TMP15:%.*]] = sdiv i32 [[TMP14]], [[X]]
 ; SINK-GATHER-NEXT:    [[TMP16:%.*]] = insertelement <8 x i32> [[TMP13]], i32 [[TMP15]], i64 3
 ; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE6]]
@@ -102,7 +102,7 @@ define i32 @predicated_sdiv_masked_load(ptr %a, ptr %b, i32 %x, i1 %c) {
 ; SINK-GATHER-NEXT:    [[TMP17:%.*]] = phi <8 x i32> [ [[TMP13]], %[[PRED_SDIV_CONTINUE4]] ], [ [[TMP16]], %[[PRED_SDIV_IF5]] ]
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF7:.*]], label %[[PRED_SDIV_CONTINUE8:.*]]
 ; SINK-GATHER:       [[PRED_SDIV_IF7]]:
-; SINK-GATHER-NEXT:    [[TMP18:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 4
+; SINK-GATHER-NEXT:    [[TMP18:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 4
 ; SINK-GATHER-NEXT:    [[TMP19:%.*]] = sdiv i32 [[TMP18]], [[X]]
 ; SINK-GATHER-NEXT:    [[TMP20:%.*]] = insertelement <8 x i32> [[TMP17]], i32 [[TMP19]], i64 4
 ; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE8]]
@@ -110,7 +110,7 @@ define i32 @predicated_sdiv_masked_load(ptr %a, ptr %b, i32 %x, i1 %c) {
 ; SINK-GATHER-NEXT:    [[TMP21:%.*]] = phi <8 x i32> [ [[TMP17]], %[[PRED_SDIV_CONTINUE6]] ], [ [[TMP20]], %[[PRED_SDIV_IF7]] ]
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF9:.*]], label %[[PRED_SDIV_CONTINUE10:.*]]
 ; SINK-GATHER:       [[PRED_SDIV_IF9]]:
-; SINK-GATHER-NEXT:    [[TMP22:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 5
+; SINK-GATHER-NEXT:    [[TMP22:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 5
 ; SINK-GATHER-NEXT:    [[TMP23:%.*]] = sdiv i32 [[TMP22]], [[X]]
 ; SINK-GATHER-NEXT:    [[TMP24:%.*]] = insertelement <8 x i32> [[TMP21]], i32 [[TMP23]], i64 5
 ; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE10]]
@@ -118,20 +118,20 @@ define i32 @predicated_sdiv_masked_load(ptr %a, ptr %b, i32 %x, i1 %c) {
 ; SINK-GATHER-NEXT:    [[TMP25:%.*]] = phi <8 x i32> [ [[TMP21]], %[[PRED_SDIV_CONTINUE8]] ], [ [[TMP24]], %[[PRED_SDIV_IF9]] ]
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF11:.*]], label %[[PRED_SDIV_CONTINUE12:.*]]
 ; SINK-GATHER:       [[PRED_SDIV_IF11]]:
-; SINK-GATHER-NEXT:    [[TMP26:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 6
+; SINK-GATHER-NEXT:    [[TMP26:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 6
 ; SINK-GATHER-NEXT:    [[TMP27:%.*]] = sdiv i32 [[TMP26]], [[X]]
 ; SINK-GATHER-NEXT:    [[TMP28:%.*]] = insertelement <8 x i32> [[TMP25]], i32 [[TMP27]], i64 6
 ; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE12]]
 ; SINK-GATHER:       [[PRED_SDIV_CONTINUE12]]:
 ; SINK-GATHER-NEXT:    [[TMP29:%.*]] = phi <8 x i32> [ [[TMP25]], %[[PRED_SDIV_CONTINUE10]] ], [ [[TMP28]], %[[PRED_SDIV_IF11]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF13:.*]], label %[[PRED_SDIV_CONTINUE14]]
-; SINK-GATHER:       [[PRED_SDIV_IF13]]:
-; SINK-GATHER-NEXT:    [[TMP30:%.*]] = extractelement <8 x i32> [[WIDE_MASKED_LOAD]], i64 7
-; SINK-GATHER-NEXT:    [[TMP31:%.*]] = sdiv i32 [[TMP30]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP32:%.*]] = insertelement <8 x i32> [[TMP29]], i32 [[TMP31]], i64 7
-; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE14]]
-; SINK-GATHER:       [[PRED_SDIV_CONTINUE14]]:
-; SINK-GATHER-NEXT:    [[TMP33:%.*]] = phi <8 x i32> [ [[TMP29]], %[[PRED_SDIV_CONTINUE12]] ], [ [[TMP32]], %[[PRED_SDIV_IF13]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_SDIV_IF14:.*]], label %[[PRED_SDIV_CONTINUE15]]
+; SINK-GATHER:       [[PRED_SDIV_IF14]]:
+; SINK-GATHER-NEXT:    [[TMP38:%.*]] = extractelement <8 x i32> [[WIDE_LOAD2]], i64 7
+; SINK-GATHER-NEXT:    [[TMP39:%.*]] = sdiv i32 [[TMP38]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP32:%.*]] = insertelement <8 x i32> [[TMP29]], i32 [[TMP39]], i64 7
+; SINK-GATHER-NEXT:    br label %[[PRED_SDIV_CONTINUE15]]
+; SINK-GATHER:       [[PRED_SDIV_CONTINUE15]]:
+; SINK-GATHER-NEXT:    [[TMP33:%.*]] = phi <8 x i32> [ [[TMP29]], %[[PRED_SDIV_CONTINUE12]] ], [ [[TMP32]], %[[PRED_SDIV_IF14]] ]
 ; SINK-GATHER-NEXT:    [[TMP34:%.*]] = add nsw <8 x i32> [[TMP33]], [[WIDE_LOAD]]
 ; SINK-GATHER-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <8 x i32> [[TMP34]], <8 x i32> [[WIDE_LOAD]]
 ; SINK-GATHER-NEXT:    [[TMP35]] = add <8 x i32> [[VEC_PHI]], [[PREDPHI]]
@@ -195,25 +195,25 @@ define i32 @scalarize_and_sink_gather(ptr %a, i1 %c, i32 %x, i64 %n) {
 ; CHECK-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF:.*]], label %[[PRED_UDIV_CONTINUE:.*]]
 ; CHECK:       [[PRED_UDIV_IF]]:
 ; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[INDEX]], 777
-; CHECK-NEXT:    [[TMP2:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP1]]
-; CHECK-NEXT:    [[TMP3:%.*]] = load i32, ptr [[TMP2]], align 4
-; CHECK-NEXT:    [[TMP4:%.*]] = udiv i32 [[TMP3]], [[X]]
-; CHECK-NEXT:    [[TMP5:%.*]] = insertelement <2 x i32> poison, i32 [[TMP4]], i64 0
+; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP1]]
+; CHECK-NEXT:    [[TMP4:%.*]] = load i32, ptr [[TMP3]], align 4
+; CHECK-NEXT:    [[TMP5:%.*]] = udiv i32 [[TMP4]], [[X]]
+; CHECK-NEXT:    [[TMP6:%.*]] = insertelement <2 x i32> poison, i32 [[TMP5]], i64 0
 ; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE]]
 ; CHECK:       [[PRED_UDIV_CONTINUE]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = phi <2 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP5]], %[[PRED_UDIV_IF]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi <2 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP6]], %[[PRED_UDIV_IF]] ]
 ; CHECK-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF1:.*]], label %[[PRED_UDIV_CONTINUE2]]
 ; CHECK:       [[PRED_UDIV_IF1]]:
-; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[INDEX]], 1
-; CHECK-NEXT:    [[TMP8:%.*]] = mul i64 [[TMP7]], 777
-; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP8]]
+; CHECK-NEXT:    [[TMP8:%.*]] = add i64 [[INDEX]], 1
+; CHECK-NEXT:    [[TMP12:%.*]] = mul i64 [[TMP8]], 777
+; CHECK-NEXT:    [[TMP9:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP12]]
 ; CHECK-NEXT:    [[TMP10:%.*]] = load i32, ptr [[TMP9]], align 4
 ; CHECK-NEXT:    [[TMP11:%.*]] = udiv i32 [[TMP10]], [[X]]
-; CHECK-NEXT:    [[TMP12:%.*]] = insertelement <2 x i32> [[TMP6]], i32 [[TMP11]], i64 1
+; CHECK-NEXT:    [[TMP13:%.*]] = insertelement <2 x i32> [[TMP7]], i32 [[TMP11]], i64 1
 ; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE2]]
 ; CHECK:       [[PRED_UDIV_CONTINUE2]]:
-; CHECK-NEXT:    [[TMP13:%.*]] = phi <2 x i32> [ [[TMP6]], %[[PRED_UDIV_CONTINUE]] ], [ [[TMP12]], %[[PRED_UDIV_IF1]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <2 x i32> [[TMP13]], <2 x i32> [[BROADCAST_SPLAT]]
+; CHECK-NEXT:    [[TMP17:%.*]] = phi <2 x i32> [ [[TMP7]], %[[PRED_UDIV_CONTINUE]] ], [ [[TMP13]], %[[PRED_UDIV_IF1]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <2 x i32> [[TMP17]], <2 x i32> [[BROADCAST_SPLAT]]
 ; CHECK-NEXT:    [[TMP14]] = add <2 x i32> [[VEC_PHI]], [[PREDPHI]]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
 ; CHECK-NEXT:    [[TMP15:%.*]] = icmp eq i64 [[INDEX_NEXT]], [[N_VEC]]
@@ -266,84 +266,84 @@ define i32 @scalarize_and_sink_gather(ptr %a, i1 %c, i32 %x, i64 %n) {
 ; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF:.*]], label %[[PRED_UDIV_CONTINUE:.*]]
 ; SINK-GATHER:       [[PRED_UDIV_IF]]:
 ; SINK-GATHER-NEXT:    [[TMP1:%.*]] = extractelement <8 x i64> [[TMP0]], i64 0
-; SINK-GATHER-NEXT:    [[TMP2:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP1]]
-; SINK-GATHER-NEXT:    [[TMP3:%.*]] = load i32, ptr [[TMP2]], align 4
-; SINK-GATHER-NEXT:    [[TMP4:%.*]] = udiv i32 [[TMP3]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP5:%.*]] = insertelement <8 x i32> poison, i32 [[TMP4]], i64 0
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE]]:
-; SINK-GATHER-NEXT:    [[TMP6:%.*]] = phi <8 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP5]], %[[PRED_UDIV_IF]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF1:.*]], label %[[PRED_UDIV_CONTINUE2:.*]]
-; SINK-GATHER:       [[PRED_UDIV_IF1]]:
-; SINK-GATHER-NEXT:    [[TMP7:%.*]] = extractelement <8 x i64> [[TMP0]], i64 1
-; SINK-GATHER-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP7]]
-; SINK-GATHER-NEXT:    [[TMP9:%.*]] = load i32, ptr [[TMP8]], align 4
-; SINK-GATHER-NEXT:    [[TMP10:%.*]] = udiv i32 [[TMP9]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP11:%.*]] = insertelement <8 x i32> [[TMP6]], i32 [[TMP10]], i64 1
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE2]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE2]]:
-; SINK-GATHER-NEXT:    [[TMP12:%.*]] = phi <8 x i32> [ [[TMP6]], %[[PRED_UDIV_CONTINUE]] ], [ [[TMP11]], %[[PRED_UDIV_IF1]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF3:.*]], label %[[PRED_UDIV_CONTINUE4:.*]]
-; SINK-GATHER:       [[PRED_UDIV_IF3]]:
-; SINK-GATHER-NEXT:    [[TMP13:%.*]] = extractelement <8 x i64> [[TMP0]], i64 2
-; SINK-GATHER-NEXT:    [[TMP14:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP13]]
-; SINK-GATHER-NEXT:    [[TMP15:%.*]] = load i32, ptr [[TMP14]], align 4
-; SINK-GATHER-NEXT:    [[TMP16:%.*]] = udiv i32 [[TMP15]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP17:%.*]] = insertelement <8 x i32> [[TMP12]], i32 [[TMP16]], i64 2
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE4]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE4]]:
-; SINK-GATHER-NEXT:    [[TMP18:%.*]] = phi <8 x i32> [ [[TMP12]], %[[PRED_UDIV_CONTINUE2]] ], [ [[TMP17]], %[[PRED_UDIV_IF3]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF5:.*]], label %[[PRED_UDIV_CONTINUE6:.*]]
-; SINK-GATHER:       [[PRED_UDIV_IF5]]:
-; SINK-GATHER-NEXT:    [[TMP19:%.*]] = extractelement <8 x i64> [[TMP0]], i64 3
-; SINK-GATHER-NEXT:    [[TMP20:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP19]]
-; SINK-GATHER-NEXT:    [[TMP21:%.*]] = load i32, ptr [[TMP20]], align 4
-; SINK-GATHER-NEXT:    [[TMP22:%.*]] = udiv i32 [[TMP21]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP23:%.*]] = insertelement <8 x i32> [[TMP18]], i32 [[TMP22]], i64 3
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE6]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE6]]:
-; SINK-GATHER-NEXT:    [[TMP24:%.*]] = phi <8 x i32> [ [[TMP18]], %[[PRED_UDIV_CONTINUE4]] ], [ [[TMP23]], %[[PRED_UDIV_IF5]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF7:.*]], label %[[PRED_UDIV_CONTINUE8:.*]]
-; SINK-GATHER:       [[PRED_UDIV_IF7]]:
-; SINK-GATHER-NEXT:    [[TMP25:%.*]] = extractelement <8 x i64> [[TMP0]], i64 4
-; SINK-GATHER-NEXT:    [[TMP26:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP25]]
-; SINK-GATHER-NEXT:    [[TMP27:%.*]] = load i32, ptr [[TMP26]], align 4
-; SINK-GATHER-NEXT:    [[TMP28:%.*]] = udiv i32 [[TMP27]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP29:%.*]] = insertelement <8 x i32> [[TMP24]], i32 [[TMP28]], i64 4
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE8]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE8]]:
-; SINK-GATHER-NEXT:    [[TMP30:%.*]] = phi <8 x i32> [ [[TMP24]], %[[PRED_UDIV_CONTINUE6]] ], [ [[TMP29]], %[[PRED_UDIV_IF7]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF9:.*]], label %[[PRED_UDIV_CONTINUE10:.*]]
-; SINK-GATHER:       [[PRED_UDIV_IF9]]:
-; SINK-GATHER-NEXT:    [[TMP31:%.*]] = extractelement <8 x i64> [[TMP0]], i64 5
-; SINK-GATHER-NEXT:    [[TMP32:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP31]]
-; SINK-GATHER-NEXT:    [[TMP33:%.*]] = load i32, ptr [[TMP32]], align 4
-; SINK-GATHER-NEXT:    [[TMP34:%.*]] = udiv i32 [[TMP33]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP35:%.*]] = insertelement <8 x i32> [[TMP30]], i32 [[TMP34]], i64 5
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE10]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE10]]:
-; SINK-GATHER-NEXT:    [[TMP36:%.*]] = phi <8 x i32> [ [[TMP30]], %[[PRED_UDIV_CONTINUE8]] ], [ [[TMP35]], %[[PRED_UDIV_IF9]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF11:.*]], label %[[PRED_UDIV_CONTINUE12:.*]]
-; SINK-GATHER:       [[PRED_UDIV_IF11]]:
-; SINK-GATHER-NEXT:    [[TMP37:%.*]] = extractelement <8 x i64> [[TMP0]], i64 6
-; SINK-GATHER-NEXT:    [[TMP38:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP37]]
-; SINK-GATHER-NEXT:    [[TMP39:%.*]] = load i32, ptr [[TMP38]], align 4
-; SINK-GATHER-NEXT:    [[TMP40:%.*]] = udiv i32 [[TMP39]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP41:%.*]] = insertelement <8 x i32> [[TMP36]], i32 [[TMP40]], i64 6
-; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE12]]
-; SINK-GATHER:       [[PRED_UDIV_CONTINUE12]]:
-; SINK-GATHER-NEXT:    [[TMP42:%.*]] = phi <8 x i32> [ [[TMP36]], %[[PRED_UDIV_CONTINUE10]] ], [ [[TMP41]], %[[PRED_UDIV_IF11]] ]
-; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF13:.*]], label %[[PRED_UDIV_CONTINUE14]]
-; SINK-GATHER:       [[PRED_UDIV_IF13]]:
-; SINK-GATHER-NEXT:    [[TMP43:%.*]] = extractelement <8 x i64> [[TMP0]], i64 7
-; SINK-GATHER-NEXT:    [[TMP44:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP43]]
+; SINK-GATHER-NEXT:    [[TMP44:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP1]]
 ; SINK-GATHER-NEXT:    [[TMP45:%.*]] = load i32, ptr [[TMP44]], align 4
 ; SINK-GATHER-NEXT:    [[TMP46:%.*]] = udiv i32 [[TMP45]], [[X]]
-; SINK-GATHER-NEXT:    [[TMP47:%.*]] = insertelement <8 x i32> [[TMP42]], i32 [[TMP46]], i64 7
+; SINK-GATHER-NEXT:    [[TMP7:%.*]] = insertelement <8 x i32> poison, i32 [[TMP46]], i64 0
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE]]:
+; SINK-GATHER-NEXT:    [[TMP8:%.*]] = phi <8 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP7]], %[[PRED_UDIV_IF]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF1:.*]], label %[[PRED_UDIV_CONTINUE2:.*]]
+; SINK-GATHER:       [[PRED_UDIV_IF1]]:
+; SINK-GATHER-NEXT:    [[TMP9:%.*]] = extractelement <8 x i64> [[TMP0]], i64 1
+; SINK-GATHER-NEXT:    [[TMP10:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP9]]
+; SINK-GATHER-NEXT:    [[TMP11:%.*]] = load i32, ptr [[TMP10]], align 4
+; SINK-GATHER-NEXT:    [[TMP12:%.*]] = udiv i32 [[TMP11]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP13:%.*]] = insertelement <8 x i32> [[TMP8]], i32 [[TMP12]], i64 1
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE2]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE2]]:
+; SINK-GATHER-NEXT:    [[TMP14:%.*]] = phi <8 x i32> [ [[TMP8]], %[[PRED_UDIV_CONTINUE]] ], [ [[TMP13]], %[[PRED_UDIV_IF1]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF3:.*]], label %[[PRED_UDIV_CONTINUE4:.*]]
+; SINK-GATHER:       [[PRED_UDIV_IF3]]:
+; SINK-GATHER-NEXT:    [[TMP15:%.*]] = extractelement <8 x i64> [[TMP0]], i64 2
+; SINK-GATHER-NEXT:    [[TMP16:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP15]]
+; SINK-GATHER-NEXT:    [[TMP17:%.*]] = load i32, ptr [[TMP16]], align 4
+; SINK-GATHER-NEXT:    [[TMP18:%.*]] = udiv i32 [[TMP17]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP19:%.*]] = insertelement <8 x i32> [[TMP14]], i32 [[TMP18]], i64 2
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE4]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE4]]:
+; SINK-GATHER-NEXT:    [[TMP20:%.*]] = phi <8 x i32> [ [[TMP14]], %[[PRED_UDIV_CONTINUE2]] ], [ [[TMP19]], %[[PRED_UDIV_IF3]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF5:.*]], label %[[PRED_UDIV_CONTINUE6:.*]]
+; SINK-GATHER:       [[PRED_UDIV_IF5]]:
+; SINK-GATHER-NEXT:    [[TMP21:%.*]] = extractelement <8 x i64> [[TMP0]], i64 3
+; SINK-GATHER-NEXT:    [[TMP22:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP21]]
+; SINK-GATHER-NEXT:    [[TMP23:%.*]] = load i32, ptr [[TMP22]], align 4
+; SINK-GATHER-NEXT:    [[TMP24:%.*]] = udiv i32 [[TMP23]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP25:%.*]] = insertelement <8 x i32> [[TMP20]], i32 [[TMP24]], i64 3
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE6]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE6]]:
+; SINK-GATHER-NEXT:    [[TMP26:%.*]] = phi <8 x i32> [ [[TMP20]], %[[PRED_UDIV_CONTINUE4]] ], [ [[TMP25]], %[[PRED_UDIV_IF5]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF7:.*]], label %[[PRED_UDIV_CONTINUE8:.*]]
+; SINK-GATHER:       [[PRED_UDIV_IF7]]:
+; SINK-GATHER-NEXT:    [[TMP27:%.*]] = extractelement <8 x i64> [[TMP0]], i64 4
+; SINK-GATHER-NEXT:    [[TMP28:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP27]]
+; SINK-GATHER-NEXT:    [[TMP29:%.*]] = load i32, ptr [[TMP28]], align 4
+; SINK-GATHER-NEXT:    [[TMP30:%.*]] = udiv i32 [[TMP29]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP31:%.*]] = insertelement <8 x i32> [[TMP26]], i32 [[TMP30]], i64 4
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE8]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE8]]:
+; SINK-GATHER-NEXT:    [[TMP32:%.*]] = phi <8 x i32> [ [[TMP26]], %[[PRED_UDIV_CONTINUE6]] ], [ [[TMP31]], %[[PRED_UDIV_IF7]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF9:.*]], label %[[PRED_UDIV_CONTINUE10:.*]]
+; SINK-GATHER:       [[PRED_UDIV_IF9]]:
+; SINK-GATHER-NEXT:    [[TMP33:%.*]] = extractelement <8 x i64> [[TMP0]], i64 5
+; SINK-GATHER-NEXT:    [[TMP34:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP33]]
+; SINK-GATHER-NEXT:    [[TMP35:%.*]] = load i32, ptr [[TMP34]], align 4
+; SINK-GATHER-NEXT:    [[TMP36:%.*]] = udiv i32 [[TMP35]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP37:%.*]] = insertelement <8 x i32> [[TMP32]], i32 [[TMP36]], i64 5
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE10]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE10]]:
+; SINK-GATHER-NEXT:    [[TMP38:%.*]] = phi <8 x i32> [ [[TMP32]], %[[PRED_UDIV_CONTINUE8]] ], [ [[TMP37]], %[[PRED_UDIV_IF9]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF11:.*]], label %[[PRED_UDIV_CONTINUE12:.*]]
+; SINK-GATHER:       [[PRED_UDIV_IF11]]:
+; SINK-GATHER-NEXT:    [[TMP39:%.*]] = extractelement <8 x i64> [[TMP0]], i64 6
+; SINK-GATHER-NEXT:    [[TMP40:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP39]]
+; SINK-GATHER-NEXT:    [[TMP41:%.*]] = load i32, ptr [[TMP40]], align 4
+; SINK-GATHER-NEXT:    [[TMP42:%.*]] = udiv i32 [[TMP41]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP43:%.*]] = insertelement <8 x i32> [[TMP38]], i32 [[TMP42]], i64 6
+; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE12]]
+; SINK-GATHER:       [[PRED_UDIV_CONTINUE12]]:
+; SINK-GATHER-NEXT:    [[TMP52:%.*]] = phi <8 x i32> [ [[TMP38]], %[[PRED_UDIV_CONTINUE10]] ], [ [[TMP43]], %[[PRED_UDIV_IF11]] ]
+; SINK-GATHER-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF13:.*]], label %[[PRED_UDIV_CONTINUE14]]
+; SINK-GATHER:       [[PRED_UDIV_IF13]]:
+; SINK-GATHER-NEXT:    [[TMP53:%.*]] = extractelement <8 x i64> [[TMP0]], i64 7
+; SINK-GATHER-NEXT:    [[TMP54:%.*]] = getelementptr inbounds i32, ptr [[A]], i64 [[TMP53]]
+; SINK-GATHER-NEXT:    [[TMP47:%.*]] = load i32, ptr [[TMP54]], align 4
+; SINK-GATHER-NEXT:    [[TMP48:%.*]] = udiv i32 [[TMP47]], [[X]]
+; SINK-GATHER-NEXT:    [[TMP55:%.*]] = insertelement <8 x i32> [[TMP52]], i32 [[TMP48]], i64 7
 ; SINK-GATHER-NEXT:    br label %[[PRED_UDIV_CONTINUE14]]
 ; SINK-GATHER:       [[PRED_UDIV_CONTINUE14]]:
-; SINK-GATHER-NEXT:    [[TMP48:%.*]] = phi <8 x i32> [ [[TMP42]], %[[PRED_UDIV_CONTINUE12]] ], [ [[TMP47]], %[[PRED_UDIV_IF13]] ]
-; SINK-GATHER-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <8 x i32> [[TMP48]], <8 x i32> [[BROADCAST_SPLAT]]
+; SINK-GATHER-NEXT:    [[TMP56:%.*]] = phi <8 x i32> [ [[TMP52]], %[[PRED_UDIV_CONTINUE12]] ], [ [[TMP55]], %[[PRED_UDIV_IF13]] ]
+; SINK-GATHER-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <8 x i32> [[TMP56]], <8 x i32> [[BROADCAST_SPLAT]]
 ; SINK-GATHER-NEXT:    [[TMP49]] = add <8 x i32> [[VEC_PHI]], [[PREDPHI]]
 ; SINK-GATHER-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 8
 ; SINK-GATHER-NEXT:    [[VEC_IND_NEXT]] = add nuw nsw <8 x i64> [[VEC_IND]], splat (i64 8)

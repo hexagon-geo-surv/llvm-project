@@ -6944,10 +6944,33 @@ void LoopVectorizationPlanner::addReductionResultComputation(
                 CloneChain(cast<VPSingleDefRecipe>(Op));
               NewOps.push_back(Substitutions.lookup_or(Op, Op));
             }
+
+            DEBUG_WITH_TYPE("my", {
+              dbgs() << "Cloning " << *Old
+                     << ", type: " << *Old->getScalarType() << "\n";
+              for (auto V : Old->operands()) {
+                dbgs() << "  op " << *V->getScalarType() << " ";
+                V->dump();
+              }
+              dbgs() << "New ops:\n";
+              for (auto V : NewOps) {
+                dbgs() << "  op " << *V->getScalarType() << " ";
+                V->dump();
+              }
+            });
             VPSingleDefRecipe *New;
-            if (auto *B = dyn_cast<VPBlendRecipe>(Old))
+            if (auto *B = dyn_cast<VPBlendRecipe>(Old)) {
+
+              DEBUG_WITH_TYPE("my", {
+                dbgs() << "It is a blend:\n";
+                for (unsigned i = 0; i < B->getNumIncomingValues(); ++i) {
+                  auto V = B->getIncomingValue(i);
+                  dbgs() << "  op " << *V->getScalarType() << " ";
+                  V->dump();
+                }
+              });
               New = B->cloneWithOperands(NewOps);
-            else if (auto *W = dyn_cast<VPWidenRecipe>(Old))
+            } else if (auto *W = dyn_cast<VPWidenRecipe>(Old))
               New = W->cloneWithOperands(NewOps);
             else if (auto *Rep = dyn_cast<VPReplicateRecipe>(Old))
               New = Rep->cloneWithOperands(NewOps);

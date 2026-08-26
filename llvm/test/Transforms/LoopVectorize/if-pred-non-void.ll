@@ -757,21 +757,21 @@ define i32 @predicated_udiv_scalarized_operand(ptr %a, i1 %c, i32 %x, i64 %n) {
 ; CHECK-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF:.*]], label %[[PRED_UDIV_CONTINUE:.*]]
 ; CHECK:       [[PRED_UDIV_IF]]:
 ; CHECK-NEXT:    [[TMP1:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 0
-; CHECK-NEXT:    [[TMP2:%.*]] = add nsw i32 [[TMP1]], [[X]]
-; CHECK-NEXT:    [[TMP4:%.*]] = udiv i32 [[TMP1]], [[TMP2]]
-; CHECK-NEXT:    [[TMP5:%.*]] = insertelement <2 x i32> poison, i32 [[TMP4]], i64 0
+; CHECK-NEXT:    [[TMP4:%.*]] = add nsw i32 [[TMP1]], [[X]]
+; CHECK-NEXT:    [[TMP5:%.*]] = udiv i32 [[TMP1]], [[TMP4]]
+; CHECK-NEXT:    [[TMP6:%.*]] = insertelement <2 x i32> poison, i32 [[TMP5]], i64 0
 ; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE]]
 ; CHECK:       [[PRED_UDIV_CONTINUE]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = phi <2 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP5]], %[[PRED_UDIV_IF]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi <2 x i32> [ poison, %[[VECTOR_BODY]] ], [ [[TMP6]], %[[PRED_UDIV_IF]] ]
 ; CHECK-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF1:.*]], label %[[PRED_UDIV_CONTINUE2]]
 ; CHECK:       [[PRED_UDIV_IF1]]:
-; CHECK-NEXT:    [[TMP7:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 1
-; CHECK-NEXT:    [[TMP8:%.*]] = add nsw i32 [[TMP7]], [[X]]
-; CHECK-NEXT:    [[TMP10:%.*]] = udiv i32 [[TMP7]], [[TMP8]]
-; CHECK-NEXT:    [[TMP11:%.*]] = insertelement <2 x i32> [[TMP6]], i32 [[TMP10]], i64 1
+; CHECK-NEXT:    [[TMP8:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 1
+; CHECK-NEXT:    [[TMP9:%.*]] = add nsw i32 [[TMP8]], [[X]]
+; CHECK-NEXT:    [[TMP10:%.*]] = udiv i32 [[TMP8]], [[TMP9]]
+; CHECK-NEXT:    [[TMP11:%.*]] = insertelement <2 x i32> [[TMP7]], i32 [[TMP10]], i64 1
 ; CHECK-NEXT:    br label %[[PRED_UDIV_CONTINUE2]]
 ; CHECK:       [[PRED_UDIV_CONTINUE2]]:
-; CHECK-NEXT:    [[TMP12:%.*]] = phi <2 x i32> [ [[TMP6]], %[[PRED_UDIV_CONTINUE]] ], [ [[TMP11]], %[[PRED_UDIV_IF1]] ]
+; CHECK-NEXT:    [[TMP12:%.*]] = phi <2 x i32> [ [[TMP7]], %[[PRED_UDIV_CONTINUE]] ], [ [[TMP11]], %[[PRED_UDIV_IF1]] ]
 ; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], <2 x i32> [[TMP12]], <2 x i32> [[WIDE_LOAD]]
 ; CHECK-NEXT:    [[TMP13]] = add <2 x i32> [[VEC_PHI]], [[PREDPHI]]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
@@ -827,19 +827,19 @@ define i32 @predicated_udiv_scalarized_operand(ptr %a, i1 %c, i32 %x, i64 %n) {
 ; UNROLL-NO-VF-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF:.*]], label %[[PRED_UDIV_CONTINUE:.*]]
 ; UNROLL-NO-VF:       [[PRED_UDIV_IF]]:
 ; UNROLL-NO-VF-NEXT:    [[TMP5:%.*]] = add nsw i32 [[TMP3]], [[X]]
-; UNROLL-NO-VF-NEXT:    [[TMP6:%.*]] = udiv i32 [[TMP3]], [[TMP5]]
+; UNROLL-NO-VF-NEXT:    [[TMP10:%.*]] = udiv i32 [[TMP3]], [[TMP5]]
 ; UNROLL-NO-VF-NEXT:    br label %[[PRED_UDIV_CONTINUE]]
 ; UNROLL-NO-VF:       [[PRED_UDIV_CONTINUE]]:
-; UNROLL-NO-VF-NEXT:    [[TMP7:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP6]], %[[PRED_UDIV_IF]] ]
+; UNROLL-NO-VF-NEXT:    [[TMP14:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP10]], %[[PRED_UDIV_IF]] ]
 ; UNROLL-NO-VF-NEXT:    br i1 [[C]], label %[[PRED_UDIV_IF2:.*]], label %[[PRED_UDIV_CONTINUE3]]
 ; UNROLL-NO-VF:       [[PRED_UDIV_IF2]]:
 ; UNROLL-NO-VF-NEXT:    [[TMP8:%.*]] = add nsw i32 [[TMP4]], [[X]]
 ; UNROLL-NO-VF-NEXT:    [[TMP9:%.*]] = udiv i32 [[TMP4]], [[TMP8]]
 ; UNROLL-NO-VF-NEXT:    br label %[[PRED_UDIV_CONTINUE3]]
 ; UNROLL-NO-VF:       [[PRED_UDIV_CONTINUE3]]:
-; UNROLL-NO-VF-NEXT:    [[TMP10:%.*]] = phi i32 [ poison, %[[PRED_UDIV_CONTINUE]] ], [ [[TMP9]], %[[PRED_UDIV_IF2]] ]
-; UNROLL-NO-VF-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], i32 [[TMP7]], i32 [[TMP3]]
-; UNROLL-NO-VF-NEXT:    [[PREDPHI4:%.*]] = select i1 [[C]], i32 [[TMP10]], i32 [[TMP4]]
+; UNROLL-NO-VF-NEXT:    [[TMP15:%.*]] = phi i32 [ poison, %[[PRED_UDIV_CONTINUE]] ], [ [[TMP9]], %[[PRED_UDIV_IF2]] ]
+; UNROLL-NO-VF-NEXT:    [[PREDPHI:%.*]] = select i1 [[C]], i32 [[TMP14]], i32 [[TMP3]]
+; UNROLL-NO-VF-NEXT:    [[PREDPHI4:%.*]] = select i1 [[C]], i32 [[TMP15]], i32 [[TMP4]]
 ; UNROLL-NO-VF-NEXT:    [[TMP11]] = add i32 [[VEC_PHI]], [[PREDPHI]]
 ; UNROLL-NO-VF-NEXT:    [[TMP12]] = add i32 [[VEC_PHI1]], [[PREDPHI4]]
 ; UNROLL-NO-VF-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
