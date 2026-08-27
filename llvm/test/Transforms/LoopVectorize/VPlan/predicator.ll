@@ -649,16 +649,14 @@ define void @blend_masks_triangle_phi_multiple_blends(ptr noalias %p, i1 %c0, i1
 ; CHECK-NEXT:    bb2:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<poison>, vector.body ], [ ir<%add1>, bb1 ]
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb1 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb1 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb1 ]
-; CHECK-NEXT:      EMIT vp<[[VP8:%[0-9]+]]> = not ir<%c1>
+; CHECK-NEXT:      EMIT vp<[[VP6:%[0-9]+]]> = not ir<%c1>
 ; CHECK-NEXT:      EMIT ir<%add2> = add ir<%iv>, ir<1>
 ; CHECK-NEXT:    Successor(s): bb3
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
 ; CHECK-NEXT:      BLEND ir<%phi1> = vp<%4>/vp<[[VP5]]> ir<%add0>/ir<true>
-; CHECK-NEXT:      BLEND ir<%phi2> = ir<%add0>/vp<[[VP6]]> ir<%add2>/ir<true>
-; CHECK-NEXT:      BLEND ir<%phi3> = vp<%4>/vp<[[VP7]]> ir<%add2>/ir<true>
+; CHECK-NEXT:      BLEND ir<%phi2> = ir<%add0>/vp<[[VP5]]> ir<%add2>/ir<true>
+; CHECK-NEXT:      BLEND ir<%phi3> = vp<%4>/vp<[[VP5]]> ir<%add2>/ir<true>
 ; CHECK-NEXT:      EMIT ir<%sum12> = add ir<%phi1>, ir<%phi2>
 ; CHECK-NEXT:      EMIT ir<%sum123> = add ir<%sum12>, ir<%phi3>
 ; CHECK-NEXT:      EMIT ir<%gep> = getelementptr ir<%p>, ir<%iv>
@@ -1130,9 +1128,8 @@ define void @outermost_uniform_branch_multiple_blends(ptr %a, i1 %u0) {
 ; CHECK-NEXT:    bb4:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<poison>, vector.body ], [ ir<%add3.1>, bb3 ]
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb3 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<false>, vector.body ], [ ir<true>, bb3 ]
 ; CHECK-NEXT:      BLEND ir<%phi4.1> = ir<0>/ir<true> vp<%4>/vp<[[VP5]]>
-; CHECK-NEXT:      BLEND ir<%phi4.2> = ir<-1>/ir<true> vp<%4>/vp<[[VP6]]>
+; CHECK-NEXT:      BLEND ir<%phi4.2> = ir<-1>/ir<true> vp<%4>/vp<[[VP5]]>
 ; CHECK-NEXT:      EMIT ir<%sum> = add ir<%phi4.1>, ir<%phi4.2>
 ; CHECK-NEXT:      EMIT store ir<%sum>, ir<%a>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add nuw nsw ir<%iv>, ir<1>
