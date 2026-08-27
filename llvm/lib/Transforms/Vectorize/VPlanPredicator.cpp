@@ -579,7 +579,8 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
       MaskBlocks.push_back(const_cast<VPBasicBlock *>(ConstMaskBlock));
 
     // The in-mask of the common dominator is true on all paths from an
-    // incoming block to the phi. Remove it from the blend masks.
+    // incoming block to the phi. Remove it before reconstructing the masks,
+    // which may otherwise obscure the common subexpression with SSA phis.
     VPBasicBlock *CommonIncomingDom =
         cast<VPBasicBlock>(VPDT.findNearestCommonDominator(
             make_range(MaskBlocks.begin(), MaskBlocks.end())));
@@ -597,9 +598,12 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
       bool RemovedCommonMask =
           CommonIncomingMask && Mask &&
           match(Mask, m_RemoveMask(CommonIncomingMask, RemainingMask));
-      if (RemovedCommonMask)
-        Mask = RemainingMask ? RemainingMask : Plan.getTrue();
-      OperandsWithMask.append({V, reconstructBlendMask(VPBB, MaskBlock, Mask)});
+      OperandsWithMask.append(
+          {V, RemovedCommonMask && !RemainingMask
+                  ? Plan.getTrue()
+                  : reconstructBlendMask(VPBB, MaskBlock,
+                                         RemovedCommonMask ? RemainingMask
+                                                           : Mask)});
     }
 
     PHINode *IRPhi = cast_or_null<PHINode>(PhiR->getUnderlyingValue());

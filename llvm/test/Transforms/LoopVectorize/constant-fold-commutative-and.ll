@@ -18,20 +18,15 @@ define void @constant_fold_commutative_and(ptr %ptr.n, ptr noalias %p, i1 %cond)
 ; CHECK-NEXT:    [[TMP1:%.*]] = icmp ule <2 x i8> [[VEC_IND]], splat (i8 16)
 ; CHECK-NEXT:    [[TMP6:%.*]] = extractelement <2 x i1> [[TMP1]], i64 0
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i64, ptr [[PTR_N]], align 4
-; CHECK-NEXT:    [[BROADCAST_SPLATINSERT1:%.*]] = insertelement <2 x i64> poison, i64 [[TMP2]], i64 0
-; CHECK-NEXT:    [[BROADCAST_SPLAT2:%.*]] = shufflevector <2 x i64> [[BROADCAST_SPLATINSERT1]], <2 x i64> poison, <2 x i32> zeroinitializer
 ; CHECK-NEXT:    br i1 [[COND]], label %[[LATCH2:.*]], label %[[PRED_11:.*]]
 ; CHECK:       [[PRED_11]]:
-; CHECK-NEXT:    [[TMP3:%.*]] = icmp uge <2 x i64> [[BROADCAST_SPLAT2]], splat (i64 4)
-; CHECK-NEXT:    [[TMP4:%.*]] = select <2 x i1> [[TMP1]], <2 x i1> [[TMP3]], <2 x i1> zeroinitializer
-; CHECK-NEXT:    [[TMP5:%.*]] = extractelement <2 x i1> [[TMP4]], i64 0
-; CHECK-NEXT:    [[TMP12:%.*]] = icmp ult i64 [[TMP2]], 7
+; CHECK-NEXT:    [[TMP3:%.*]] = icmp uge i64 [[TMP2]], 4
+; CHECK-NEXT:    [[TMP4:%.*]] = icmp ult i64 [[TMP2]], 7
 ; CHECK-NEXT:    br label %[[LATCH2]]
 ; CHECK:       [[LATCH2]]:
-; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ [[TMP6]], %[[PRED_11]] ]
-; CHECK-NEXT:    [[TMP13:%.*]] = phi i1 [ poison, %[[VECTOR_BODY]] ], [ [[TMP12]], %[[PRED_11]] ]
-; CHECK-NEXT:    [[TMP14:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ [[TMP5]], %[[PRED_11]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = select i1 [[TMP14]], i1 [[TMP13]], i1 [[TMP7]]
+; CHECK-NEXT:    [[TMP5:%.*]] = phi i1 [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_11]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ [[TMP3]], %[[PRED_11]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = select i1 [[TMP7]], i1 [[TMP5]], i1 true
 ; CHECK-NEXT:    br i1 [[TMP6]], label %[[PRED_STORE_IF:.*]], label %[[PRED_STORE_CONTINUE:.*]]
 ; CHECK:       [[PRED_STORE_IF]]:
 ; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr i8, ptr [[P]], i64 [[INDEX]]
