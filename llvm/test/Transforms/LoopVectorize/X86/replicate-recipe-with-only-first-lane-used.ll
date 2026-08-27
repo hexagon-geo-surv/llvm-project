@@ -14,19 +14,12 @@ define void @replicate_udiv_with_only_first_lane_used(i32 %x, ptr %dst, i64 %d) 
 ; CHECK:       [[VECTOR_PH]]:
 ; CHECK-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; CHECK:       [[VECTOR_BODY]]:
-; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[LOOP_LATCH1:.*]] ]
-; CHECK-NEXT:    br label %[[LOOP_LATCH1]]
-; CHECK:       [[LOOP_LATCH1]]:
-; CHECK-NEXT:    [[TMP0:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[TMP1:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP1]], i64 [[TMP0]], i64 0
-; CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i16, ptr [[DST]], i64 [[PREDPHI]]
-; CHECK-NEXT:    store i16 0, ptr [[TMP2]], align 2
-; CHECK-NEXT:    store i16 0, ptr [[TMP2]], align 2
+; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[VECTOR_BODY]] ]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 8
 ; CHECK-NEXT:    [[TMP12:%.*]] = icmp eq i64 [[INDEX_NEXT]], 96
 ; CHECK-NEXT:    br i1 [[TMP12]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP0:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
+; CHECK-NEXT:    store i16 0, ptr [[DST]], align 2
 ; CHECK-NEXT:    br label %[[SCALAR_PH:.*]]
 ; CHECK:       [[SCALAR_PH]]:
 ; CHECK-NEXT:    br label %[[LOOP_HEADER:.*]]

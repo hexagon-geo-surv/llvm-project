@@ -285,9 +285,19 @@ bool VPPredicator::shouldPreserveTerminator(VPBasicBlock *VPBB) {
   if (!Term || Term->getOpcode() != VPInstruction::BranchOnCond)
     return False("Not a branch");
 
+  if (auto *IRV = dyn_cast<VPIRValue>(Term->getOperand(0))) {
+    if (isa<Constant>(IRV->getValue())) {
+      // `removeBranchOnConst` only does shallow traversal so can't optimize
+      // this away. Changing it to deep requires extra work as some tests
+      // crash. As such, treat as non-uniform and optimize away post
+      // linearization/predication.
+      return False("branch on constant");
+    }
+  }
+
   bool IsUniformAndAvailable = [&](VPValue *V) {
     auto *IRV = dyn_cast<VPIRValue>(V);
-    return IRV && isa<Argument, Constant>(IRV->getValue());
+    return IRV && isa<Argument>(IRV->getValue());
   }(Term->getOperand(0));
 
   if (!IsUniformAndAvailable)
