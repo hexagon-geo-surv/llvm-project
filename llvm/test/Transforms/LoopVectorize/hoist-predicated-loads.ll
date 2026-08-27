@@ -919,7 +919,7 @@ define void @hoist_predicated_load_with_chained_geps1(ptr %dst, ptr %src, i1 %co
 ; CHECK:       [[ELSE3]]:
 ; CHECK-NEXT:    [[TMP20:%.*]] = getelementptr [11 x i16], ptr [[SRC]], i64 [[TMP2]]
 ; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr i8, ptr [[TMP20]], i64 8
-; CHECK-NEXT:    [[TMP8:%.*]] = load i16, ptr [[TMP21]], align 2
+; CHECK-NEXT:    [[TMP9:%.*]] = load i16, ptr [[TMP21]], align 2
 ; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
 ; CHECK:       [[THEN4]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr [11 x i16], ptr [[SRC]], i64 [[TMP2]]
@@ -927,10 +927,10 @@ define void @hoist_predicated_load_with_chained_geps1(ptr %dst, ptr %src, i1 %co
 ; CHECK-NEXT:    [[TMP5:%.*]] = load i16, ptr [[TMP4]], align 2
 ; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
 ; CHECK:       [[LOOP_LATCH5]]:
-; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ [[TMP8]], %[[ELSE3]] ], [ poison, %[[THEN4]] ]
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ [[TMP9]], %[[ELSE3]] ], [ poison, %[[THEN4]] ]
 ; CHECK-NEXT:    [[TMP7:%.*]] = phi i16 [ poison, %[[ELSE3]] ], [ [[TMP5]], %[[THEN4]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = phi i1 [ false, %[[ELSE3]] ], [ true, %[[THEN4]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP9]], i16 [[TMP7]], i16 [[TMP6]]
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i1 [ false, %[[ELSE3]] ], [ true, %[[THEN4]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP8]], i16 [[TMP7]], i16 [[TMP6]]
 ; CHECK-NEXT:    store i16 [[PREDPHI]], ptr [[DST]], align 2, !alias.scope [[META68:![0-9]+]], !noalias [[META71:![0-9]+]]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[TMP2]], 2
 ; CHECK-NEXT:    [[TMP26:%.*]] = icmp eq i64 [[INDEX_NEXT]], 100
@@ -990,17 +990,17 @@ define void @hoist_predicated_load_with_chained_geps2(ptr %dst, ptr %src, i1 %co
 ; CHECK-NEXT:    br i1 [[COND]], label %[[THEN4:.*]], label %[[ELSE3:.*]]
 ; CHECK:       [[ELSE3]]:
 ; CHECK-NEXT:    [[TMP21:%.*]] = getelementptr i8, ptr [[TMP4]], i64 8
-; CHECK-NEXT:    [[TMP7:%.*]] = load i16, ptr [[TMP21]], align 2
+; CHECK-NEXT:    [[TMP8:%.*]] = load i16, ptr [[TMP21]], align 2
 ; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
 ; CHECK:       [[THEN4]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i8, ptr [[TMP4]], i64 8
-; CHECK-NEXT:    [[TMP8:%.*]] = load i16, ptr [[TMP3]], align 2
+; CHECK-NEXT:    [[TMP9:%.*]] = load i16, ptr [[TMP3]], align 2
 ; CHECK-NEXT:    br label %[[LOOP_LATCH5]]
 ; CHECK:       [[LOOP_LATCH5]]:
-; CHECK-NEXT:    [[TMP5:%.*]] = phi i16 [ [[TMP7]], %[[ELSE3]] ], [ poison, %[[THEN4]] ]
-; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ poison, %[[ELSE3]] ], [ [[TMP8]], %[[THEN4]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = phi i1 [ false, %[[ELSE3]] ], [ true, %[[THEN4]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP9]], i16 [[TMP6]], i16 [[TMP5]]
+; CHECK-NEXT:    [[TMP5:%.*]] = phi i16 [ [[TMP8]], %[[ELSE3]] ], [ poison, %[[THEN4]] ]
+; CHECK-NEXT:    [[TMP6:%.*]] = phi i16 [ poison, %[[ELSE3]] ], [ [[TMP9]], %[[THEN4]] ]
+; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[ELSE3]] ], [ true, %[[THEN4]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP7]], i16 [[TMP6]], i16 [[TMP5]]
 ; CHECK-NEXT:    store i16 [[PREDPHI]], ptr [[DST]], align 2, !alias.scope [[META75:![0-9]+]], !noalias [[META78:![0-9]+]]
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[TMP2]], 2
 ; CHECK-NEXT:    [[TMP26:%.*]] = icmp eq i64 [[INDEX_NEXT]], 100

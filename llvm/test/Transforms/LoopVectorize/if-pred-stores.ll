@@ -321,27 +321,27 @@ define void @bug18724(i1 %cond, ptr %ptr, i1 %cond.2, i64 %v.1, i32 %v.2) {
 ; VEC-NEXT:    [[TMP6:%.*]] = insertelement <2 x i32> zeroinitializer, i32 [[V_2]], i64 0
 ; VEC-NEXT:    br label %[[VECTOR_BODY:.*]]
 ; VEC:       [[VECTOR_BODY]]:
-; VEC-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_STORE_CONTINUE3:.*]] ]
-; VEC-NEXT:    [[VEC_PHI:%.*]] = phi <2 x i32> [ [[TMP6]], %[[VECTOR_PH]] ], [ [[PREDPHI:%.*]], %[[PRED_STORE_CONTINUE3]] ]
+; VEC-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_NEXT:%.*]], %[[PRED_STORE_CONTINUE2:.*]] ]
+; VEC-NEXT:    [[VEC_PHI:%.*]] = phi <2 x i32> [ [[TMP6]], %[[VECTOR_PH]] ], [ [[PREDPHI:%.*]], %[[PRED_STORE_CONTINUE2]] ]
 ; VEC-NEXT:    [[TMP7:%.*]] = add i64 [[V_1]], [[INDEX]]
 ; VEC-NEXT:    [[TMP8:%.*]] = getelementptr inbounds [768 x i32], ptr [[PTR]], i64 0, i64 [[TMP7]]
 ; VEC-NEXT:    [[WIDE_LOAD:%.*]] = load <2 x i32>, ptr [[TMP8]], align 4
-; VEC-NEXT:    br i1 [[COND_2]], label %[[PRED_STORE_IF1:.*]], label %[[PRED_STORE_CONTINUE2:.*]]
+; VEC-NEXT:    br i1 [[COND_2]], label %[[PRED_STORE_IF:.*]], label %[[PRED_STORE_CONTINUE:.*]]
+; VEC:       [[PRED_STORE_IF]]:
+; VEC-NEXT:    [[TMP9:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 0
+; VEC-NEXT:    store i32 [[TMP9]], ptr [[TMP8]], align 4
+; VEC-NEXT:    br label %[[PRED_STORE_CONTINUE]]
+; VEC:       [[PRED_STORE_CONTINUE]]:
+; VEC-NEXT:    br i1 [[COND_2]], label %[[PRED_STORE_IF1:.*]], label %[[PRED_STORE_CONTINUE2]]
 ; VEC:       [[PRED_STORE_IF1]]:
-; VEC-NEXT:    [[TMP10:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 0
-; VEC-NEXT:    store i32 [[TMP10]], ptr [[TMP8]], align 4
+; VEC-NEXT:    [[TMP10:%.*]] = add i64 [[TMP7]], 1
+; VEC-NEXT:    [[TMP11:%.*]] = getelementptr inbounds [768 x i32], ptr [[PTR]], i64 0, i64 [[TMP10]]
+; VEC-NEXT:    [[TMP12:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 1
+; VEC-NEXT:    store i32 [[TMP12]], ptr [[TMP11]], align 4
 ; VEC-NEXT:    br label %[[PRED_STORE_CONTINUE2]]
 ; VEC:       [[PRED_STORE_CONTINUE2]]:
-; VEC-NEXT:    br i1 [[COND_2]], label %[[PRED_STORE_IF2:.*]], label %[[PRED_STORE_CONTINUE3]]
-; VEC:       [[PRED_STORE_IF2]]:
-; VEC-NEXT:    [[TMP11:%.*]] = add i64 [[TMP7]], 1
-; VEC-NEXT:    [[TMP12:%.*]] = getelementptr inbounds [768 x i32], ptr [[PTR]], i64 0, i64 [[TMP11]]
-; VEC-NEXT:    [[TMP13:%.*]] = extractelement <2 x i32> [[WIDE_LOAD]], i64 1
-; VEC-NEXT:    store i32 [[TMP13]], ptr [[TMP12]], align 4
-; VEC-NEXT:    br label %[[PRED_STORE_CONTINUE3]]
-; VEC:       [[PRED_STORE_CONTINUE3]]:
-; VEC-NEXT:    [[TMP16:%.*]] = add <2 x i32> [[VEC_PHI]], splat (i32 1)
-; VEC-NEXT:    [[PREDPHI]] = select i1 [[COND_2]], <2 x i32> [[TMP16]], <2 x i32> [[VEC_PHI]]
+; VEC-NEXT:    [[TMP13:%.*]] = add <2 x i32> [[VEC_PHI]], splat (i32 1)
+; VEC-NEXT:    [[PREDPHI]] = select i1 [[COND_2]], <2 x i32> [[TMP13]], <2 x i32> [[VEC_PHI]]
 ; VEC-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 2
 ; VEC-NEXT:    [[TMP14:%.*]] = icmp eq i64 [[INDEX_NEXT]], [[N_VEC]]
 ; VEC-NEXT:    br i1 [[TMP14]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP3:![0-9]+]]

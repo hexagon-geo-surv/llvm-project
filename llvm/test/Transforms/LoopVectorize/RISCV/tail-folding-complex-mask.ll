@@ -26,6 +26,9 @@ define void @test(i64 %n, ptr noalias %src0, ptr noalias %src1, ptr noalias %src
 ; IF-EVL-NEXT:    [[EVL_BASED_IV:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[INDEX_EVL_NEXT:%.*]], %[[LATCH7:.*]] ]
 ; IF-EVL-NEXT:    [[AVL:%.*]] = phi i64 [ [[N]], %[[VECTOR_PH]] ], [ [[AVL_NEXT:%.*]], %[[LATCH7]] ]
 ; IF-EVL-NEXT:    [[TMP7:%.*]] = call i32 @llvm.experimental.get.vector.length.i64(i64 [[AVL]], i32 4, i1 true)
+; IF-EVL-NEXT:    [[TMP6:%.*]] = call <vscale x 4 x i32> @llvm.stepvector.nxv4i32()
+; IF-EVL-NEXT:    [[TMP9:%.*]] = extractelement <vscale x 4 x i32> [[TMP6]], i64 0
+; IF-EVL-NEXT:    [[TMP8:%.*]] = icmp ult i32 [[TMP9]], [[TMP7]]
 ; IF-EVL-NEXT:    [[TMP10:%.*]] = getelementptr i32, ptr [[SRC0]], i64 [[EVL_BASED_IV]]
 ; IF-EVL-NEXT:    [[VP_OP_LOAD:%.*]] = call <vscale x 4 x i32> @llvm.vp.load.nxv4i32.p0(ptr align 4 [[TMP10]], <vscale x 4 x i1> [[BROADCAST_SPLAT]], i32 [[TMP7]])
 ; IF-EVL-NEXT:    [[PREDPHI:%.*]] = select i1 [[C1]], <vscale x 4 x i32> [[VP_OP_LOAD]], <vscale x 4 x i32> zeroinitializer
@@ -33,19 +36,20 @@ define void @test(i64 %n, ptr noalias %src0, ptr noalias %src1, ptr noalias %src
 ; IF-EVL-NEXT:    [[VP_OP_LOAD7:%.*]] = call <vscale x 4 x i32> @llvm.vp.load.nxv4i32.p0(ptr align 4 [[TMP11]], <vscale x 4 x i1> [[TMP4]], i32 [[TMP7]])
 ; IF-EVL-NEXT:    [[TMP12:%.*]] = add <vscale x 4 x i32> [[VP_OP_LOAD7]], [[PREDPHI]]
 ; IF-EVL-NEXT:    [[PREDPHI8:%.*]] = select <vscale x 4 x i1> [[TMP4]], <vscale x 4 x i32> [[TMP12]], <vscale x 4 x i32> zeroinitializer
-; IF-EVL-NEXT:    [[TMP9:%.*]] = extractelement <vscale x 4 x i32> [[PREDPHI8]], i64 0
+; IF-EVL-NEXT:    [[TMP18:%.*]] = extractelement <vscale x 4 x i32> [[PREDPHI8]], i64 0
 ; IF-EVL-NEXT:    br i1 [[C3]], label %[[LOAD_V25:.*]], label %[[LATCH7]]
 ; IF-EVL:       [[LOAD_V25]]:
-; IF-EVL-NEXT:    [[TMP14:%.*]] = getelementptr inbounds i32, ptr [[SRC2]], i64 [[EVL_BASED_IV]]
-; IF-EVL-NEXT:    [[VP_OP_LOAD6:%.*]] = call <vscale x 4 x i32> @llvm.vp.load.nxv4i32.p0(ptr align 4 [[TMP14]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP7]])
-; IF-EVL-NEXT:    [[TMP15:%.*]] = extractelement <vscale x 4 x i32> [[VP_OP_LOAD6]], i64 0
-; IF-EVL-NEXT:    [[TMP16:%.*]] = add i32 [[TMP15]], [[TMP9]]
+; IF-EVL-NEXT:    [[TMP13:%.*]] = getelementptr inbounds i32, ptr [[SRC2]], i64 [[EVL_BASED_IV]]
+; IF-EVL-NEXT:    [[VP_OP_LOAD6:%.*]] = call <vscale x 4 x i32> @llvm.vp.load.nxv4i32.p0(ptr align 4 [[TMP13]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP7]])
+; IF-EVL-NEXT:    [[TMP14:%.*]] = extractelement <vscale x 4 x i32> [[VP_OP_LOAD6]], i64 0
+; IF-EVL-NEXT:    [[TMP15:%.*]] = add i32 [[TMP14]], [[TMP18]]
 ; IF-EVL-NEXT:    br label %[[LATCH7]]
 ; IF-EVL:       [[LATCH7]]:
-; IF-EVL-NEXT:    [[TMP13:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP16]], %[[LOAD_V25]] ]
-; IF-EVL-NEXT:    [[BROADCAST_SPLATINSERT8:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP13]], i64 0
+; IF-EVL-NEXT:    [[TMP16:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP15]], %[[LOAD_V25]] ]
+; IF-EVL-NEXT:    [[TMP17:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ [[TMP8]], %[[LOAD_V25]] ]
+; IF-EVL-NEXT:    [[BROADCAST_SPLATINSERT8:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP16]], i64 0
 ; IF-EVL-NEXT:    [[BROADCAST_SPLAT9:%.*]] = shufflevector <vscale x 4 x i32> [[BROADCAST_SPLATINSERT8]], <vscale x 4 x i32> poison, <vscale x 4 x i32> zeroinitializer
-; IF-EVL-NEXT:    [[PREDPHI9:%.*]] = call <vscale x 4 x i32> @llvm.vp.merge.nxv4i32(<vscale x 4 x i1> splat (i1 true), <vscale x 4 x i32> [[BROADCAST_SPLAT9]], <vscale x 4 x i32> [[PREDPHI8]], i32 [[TMP7]])
+; IF-EVL-NEXT:    [[PREDPHI9:%.*]] = select i1 [[TMP17]], <vscale x 4 x i32> [[BROADCAST_SPLAT9]], <vscale x 4 x i32> [[PREDPHI8]]
 ; IF-EVL-NEXT:    [[TMP20:%.*]] = getelementptr inbounds i32, ptr [[DST]], i64 [[EVL_BASED_IV]]
 ; IF-EVL-NEXT:    call void @llvm.vp.store.nxv4i32.p0(<vscale x 4 x i32> [[PREDPHI9]], ptr align 4 [[TMP20]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP7]])
 ; IF-EVL-NEXT:    [[TMP21:%.*]] = zext i32 [[TMP7]] to i64
@@ -93,15 +97,15 @@ define void @test(i64 %n, ptr noalias %src0, ptr noalias %src1, ptr noalias %src
 ; NO-VP:       [[LOAD_V25]]:
 ; NO-VP-NEXT:    [[TMP12:%.*]] = getelementptr inbounds i32, ptr [[SRC2]], i64 [[INDEX]]
 ; NO-VP-NEXT:    [[WIDE_LOAD:%.*]] = load <vscale x 4 x i32>, ptr [[TMP12]], align 4
-; NO-VP-NEXT:    [[TMP16:%.*]] = extractelement <vscale x 4 x i32> [[WIDE_LOAD]], i64 0
-; NO-VP-NEXT:    [[TMP17:%.*]] = add i32 [[TMP16]], [[TMP11]]
+; NO-VP-NEXT:    [[TMP17:%.*]] = extractelement <vscale x 4 x i32> [[WIDE_LOAD]], i64 0
+; NO-VP-NEXT:    [[TMP20:%.*]] = add i32 [[TMP17]], [[TMP11]]
 ; NO-VP-NEXT:    br label %[[LATCH6]]
 ; NO-VP:       [[LATCH6]]:
-; NO-VP-NEXT:    [[TMP20:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP17]], %[[LOAD_V25]] ]
-; NO-VP-NEXT:    [[TMP21:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[LOAD_V25]] ]
-; NO-VP-NEXT:    [[BROADCAST_SPLATINSERT7:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP20]], i64 0
+; NO-VP-NEXT:    [[TMP21:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP20]], %[[LOAD_V25]] ]
+; NO-VP-NEXT:    [[TMP16:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[LOAD_V25]] ]
+; NO-VP-NEXT:    [[BROADCAST_SPLATINSERT7:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP21]], i64 0
 ; NO-VP-NEXT:    [[BROADCAST_SPLAT8:%.*]] = shufflevector <vscale x 4 x i32> [[BROADCAST_SPLATINSERT7]], <vscale x 4 x i32> poison, <vscale x 4 x i32> zeroinitializer
-; NO-VP-NEXT:    [[PREDPHI8:%.*]] = select i1 [[TMP21]], <vscale x 4 x i32> [[BROADCAST_SPLAT8]], <vscale x 4 x i32> [[PREDPHI6]]
+; NO-VP-NEXT:    [[PREDPHI8:%.*]] = select i1 [[TMP16]], <vscale x 4 x i32> [[BROADCAST_SPLAT8]], <vscale x 4 x i32> [[PREDPHI6]]
 ; NO-VP-NEXT:    [[TMP18:%.*]] = getelementptr inbounds i32, ptr [[DST]], i64 [[INDEX]]
 ; NO-VP-NEXT:    store <vscale x 4 x i32> [[PREDPHI8]], ptr [[TMP18]], align 4
 ; NO-VP-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], [[TMP1]]

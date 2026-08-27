@@ -125,6 +125,8 @@ class VPPredicator {
   VPValue *createMaskOr(VPValue *LHS, VPValue *RHS, DebugLoc DL);
 
   VPValue *reconstructSSA(VPBasicBlock *UseBB, VPValue *V, bool IsMask);
+  VPValue *reconstructBlendMask(VPBasicBlock *UseBB, VPBasicBlock *MaskBlock,
+                                VPValue *Mask);
   void fixSSA(VPRecipeBase *U, VPValue *V, bool IsMask);
   bool shouldPreserveTerminator(VPBasicBlock *VPBB);
 
@@ -249,6 +251,21 @@ VPValue *VPPredicator::reconstructSSA(VPBasicBlock *UseBB, VPValue *V,
     SSADefs[Header] =
         IsMask ? Plan.getFalse() : Plan.getPoison(RecipeValue->getScalarType());
   return vputils::reconstructSSA(UseBB, SSADefs);
+}
+
+VPValue *VPPredicator::reconstructBlendMask(VPBasicBlock *UseBB,
+                                            VPBasicBlock *MaskBlock,
+                                            VPValue *Mask) {
+  if (!Mask)
+    Mask = Plan.getTrue();
+
+  // The mask is only valid along paths from MaskBlock. Make that explicit
+  // before reconstructing it at the blend location.
+  DenseMap<VPBasicBlock *, VPValue *> BlendMaskDefs;
+  BlendMaskDefs[Plan.getVectorLoopRegion()->getEntryBasicBlock()] =
+      Plan.getFalse();
+  BlendMaskDefs[MaskBlock] = Mask;
+  return vputils::reconstructSSA(UseBB, BlendMaskDefs);
 }
 
 void VPPredicator::fixSSA(VPRecipeBase *U, VPValue *V, bool IsMask) {
@@ -580,8 +597,9 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
       bool RemovedCommonMask =
           CommonIncomingMask && Mask &&
           match(Mask, m_RemoveMask(CommonIncomingMask, RemainingMask));
-      VPValue *BlendMask = RemovedCommonMask ? RemainingMask : Mask;
-      OperandsWithMask.append({V, BlendMask ? BlendMask : Plan.getTrue()});
+      if (RemovedCommonMask)
+        Mask = RemainingMask ? RemainingMask : Plan.getTrue();
+      OperandsWithMask.append({V, reconstructBlendMask(VPBB, MaskBlock, Mask)});
     }
 
     PHINode *IRPhi = cast_or_null<PHINode>(PhiR->getUnderlyingValue());

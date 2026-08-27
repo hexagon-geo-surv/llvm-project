@@ -1319,7 +1319,8 @@ define void @uniform_branch_after_varying_branch(ptr %a, i1 %u1) {
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb3:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<poison>, bb1 ], [ ir<%add2>, bb2 ]
-; CHECK-NEXT:      BLEND ir<%phi3> = ir<%add1>/vp<[[VP4]]> vp<%5>/vp<[[VP4]]>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<false>, bb1 ], [ vp<[[VP4]]>, bb2 ]
+; CHECK-NEXT:      BLEND ir<%phi3> = ir<%add1>/vp<[[VP4]]> vp<%5>/vp<[[VP6]]>
 ; CHECK-NEXT:      EMIT ir<%add3> = add ir<%phi3>, ir<3>, vp<[[VP4]]>
 ; CHECK-NEXT:    Successor(s): bb4
 ; CHECK-EMPTY:
@@ -1489,8 +1490,10 @@ define void @uniform_branch_after_varying_branch_more_blocks(ptr %a, i1 %u1) {
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb4:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<%add2>, bb2 ], [ ir<poison>, bb3 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, bb2 ], [ ir<%add3>, bb3 ]
-; CHECK-NEXT:      BLEND ir<%phi4> = vp<%5>/vp<[[VP4]]> vp<%6>/vp<[[VP4]]>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ vp<[[VP4]]>, bb2 ], [ ir<false>, bb3 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<poison>, bb2 ], [ ir<%add3>, bb3 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP8:%[0-9]+]]> = phi [ ir<false>, bb2 ], [ vp<[[VP4]]>, bb3 ]
+; CHECK-NEXT:      BLEND ir<%phi4> = vp<%5>/vp<[[VP6]]> vp<%7>/vp<[[VP8]]>
 ; CHECK-NEXT:      EMIT ir<%add4> = add ir<%phi4>, ir<4>, vp<[[VP4]]>
 ; CHECK-NEXT:    Successor(s): bb5
 ; CHECK-EMPTY:
@@ -1681,8 +1684,10 @@ define void @uniform_branch_after_varying_branch_more_blocks_mirrored(ptr %a, i1
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    bb5:
 ; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<%add3>, bb3 ], [ ir<poison>, bb4 ]
-; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, bb3 ], [ ir<%add4>, bb4 ]
-; CHECK-NEXT:      BLEND ir<%phi5> = vp<%5>/ir<%v0> vp<%6>/ir<%v0>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<%v0>, bb3 ], [ ir<false>, bb4 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<poison>, bb3 ], [ ir<%add4>, bb4 ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP8:%[0-9]+]]> = phi [ ir<false>, bb3 ], [ ir<%v0>, bb4 ]
+; CHECK-NEXT:      BLEND ir<%phi5> = vp<%5>/vp<[[VP6]]> vp<%7>/vp<[[VP8]]>
 ; CHECK-NEXT:      EMIT ir<%add5> = add ir<%phi5>, ir<5>, ir<%v0>
 ; CHECK-NEXT:    Successor(s): bb6
 ; CHECK-EMPTY:

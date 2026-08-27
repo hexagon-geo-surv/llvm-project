@@ -244,11 +244,15 @@ define void @test_phi_in_latch_redundant(ptr %dst, i32 %a) {
 ; CHECK-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %[[VECTOR_PH]] ], [ [[CURRENT_ITERATION_NEXT:%.*]], %[[LOOP_LATCH2:.*]] ]
 ; CHECK-NEXT:    [[AVL:%.*]] = phi i64 [ 37, %[[VECTOR_PH]] ], [ [[AVL_NEXT:%.*]], %[[LOOP_LATCH2]] ]
 ; CHECK-NEXT:    [[TMP8:%.*]] = call i32 @llvm.experimental.get.vector.length.i64(i64 [[AVL]], i32 4, i1 true)
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT1:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP8]], i64 0
+; CHECK-NEXT:    [[BROADCAST_SPLAT1:%.*]] = shufflevector <vscale x 4 x i32> [[BROADCAST_SPLATINSERT1]], <vscale x 4 x i32> poison, <vscale x 4 x i32> zeroinitializer
+; CHECK-NEXT:    [[TMP4:%.*]] = call <vscale x 4 x i32> @llvm.stepvector.nxv4i32()
+; CHECK-NEXT:    [[TMP6:%.*]] = icmp ult <vscale x 4 x i32> [[TMP4]], [[BROADCAST_SPLAT1]]
 ; CHECK-NEXT:    br label %[[THEN1:.*]]
 ; CHECK:       [[THEN1]]:
 ; CHECK-NEXT:    br label %[[LOOP_LATCH2]]
 ; CHECK:       [[LOOP_LATCH2]]:
-; CHECK-NEXT:    [[PREDPHI:%.*]] = call <vscale x 4 x i32> @llvm.vp.merge.nxv4i32(<vscale x 4 x i1> splat (i1 true), <vscale x 4 x i32> [[BROADCAST_SPLAT]], <vscale x 4 x i32> zeroinitializer, i32 [[TMP8]])
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select <vscale x 4 x i1> [[TMP6]], <vscale x 4 x i32> [[BROADCAST_SPLAT]], <vscale x 4 x i32> zeroinitializer
 ; CHECK-NEXT:    [[TMP2:%.*]] = mul i64 [[INDEX]], 36
 ; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i8, ptr [[DST]], i64 [[TMP2]]
 ; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.nxv4i32.p0.i64(<vscale x 4 x i32> [[PREDPHI]], ptr align 4 [[TMP3]], i64 36, <vscale x 4 x i1> splat (i1 true), i32 [[TMP8]])

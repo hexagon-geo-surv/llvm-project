@@ -18,11 +18,11 @@ define void @replicate_udiv_with_only_first_lane_used(i32 %x, ptr %dst, i64 %d) 
 ; CHECK-NEXT:    br label %[[LOOP_LATCH1]]
 ; CHECK:       [[LOOP_LATCH1]]:
 ; CHECK-NEXT:    [[TMP0:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[TMP2:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP2]], i64 [[TMP0]], i64 0
-; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i16, ptr [[DST]], i64 [[PREDPHI]]
-; CHECK-NEXT:    store i16 0, ptr [[TMP1]], align 2
-; CHECK-NEXT:    store i16 0, ptr [[TMP1]], align 2
+; CHECK-NEXT:    [[TMP1:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP1]], i64 [[TMP0]], i64 0
+; CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i16, ptr [[DST]], i64 [[PREDPHI]]
+; CHECK-NEXT:    store i16 0, ptr [[TMP2]], align 2
+; CHECK-NEXT:    store i16 0, ptr [[TMP2]], align 2
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 8
 ; CHECK-NEXT:    [[TMP12:%.*]] = icmp eq i64 [[INDEX_NEXT]], 96
 ; CHECK-NEXT:    br i1 [[TMP12]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP0:![0-9]+]]

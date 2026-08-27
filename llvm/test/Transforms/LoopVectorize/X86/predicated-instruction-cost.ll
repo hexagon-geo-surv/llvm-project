@@ -71,17 +71,17 @@ define void @test_wide_shift_uses_predicated_invariant_instruction(i32 %d, i1 %c
 ; CHECK-NEXT:    br label %[[LOOP_LATCH]]
 ; CHECK:       [[LOOP_LATCH]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP2]], %[[ELSE]] ]
-; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[ELSE]] ]
+; CHECK-NEXT:    [[TMP4:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[ELSE]] ]
 ; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i32> poison, i32 [[TMP3]], i64 0
 ; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <4 x i32> [[BROADCAST_SPLATINSERT]], <4 x i32> poison, <4 x i32> zeroinitializer
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP7]], <4 x i32> [[BROADCAST_SPLAT]], <4 x i32> zeroinitializer
-; CHECK-NEXT:    [[TMP4:%.*]] = getelementptr inbounds i32, ptr [[DST]], i32 [[INDEX]]
-; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr inbounds i32, ptr [[TMP4]], i64 4
-; CHECK-NEXT:    store <4 x i32> [[PREDPHI]], ptr [[TMP4]], align 4
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP4]], <4 x i32> [[BROADCAST_SPLAT]], <4 x i32> zeroinitializer
+; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr inbounds i32, ptr [[DST]], i32 [[INDEX]]
+; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr inbounds i32, ptr [[TMP5]], i64 4
 ; CHECK-NEXT:    store <4 x i32> [[PREDPHI]], ptr [[TMP5]], align 4
+; CHECK-NEXT:    store <4 x i32> [[PREDPHI]], ptr [[TMP6]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i32 [[INDEX]], 8
-; CHECK-NEXT:    [[TMP6:%.*]] = icmp eq i32 [[INDEX_NEXT]], 96
-; CHECK-NEXT:    br i1 [[TMP6]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP0:![0-9]+]]
+; CHECK-NEXT:    [[TMP7:%.*]] = icmp eq i32 [[INDEX_NEXT]], 96
+; CHECK-NEXT:    br i1 [[TMP7]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP0:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
 ; CHECK-NEXT:    br label %[[SCALAR_PH:.*]]
 ; CHECK:       [[SCALAR_PH]]:
