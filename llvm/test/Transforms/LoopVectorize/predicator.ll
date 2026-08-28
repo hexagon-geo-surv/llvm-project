@@ -636,13 +636,14 @@ define void @uniform_branch_after_varying_branch(ptr %a, i1 %u1) {
 ; CHECK-NEXT:    [[TMP2:%.*]] = add <4 x i64> [[VEC_IND]], splat (i64 1)
 ; CHECK-NEXT:    br i1 [[U1]], label %[[BB21:.*]], label %[[BB32]]
 ; CHECK:       [[BB21]]:
-; CHECK-NEXT:    [[TMP8:%.*]] = add i64 [[INDEX]], 2
+; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[INDEX]], 2
 ; CHECK-NEXT:    br label %[[BB32]]
 ; CHECK:       [[BB32]]:
-; CHECK-NEXT:    [[TMP3:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ], [ [[TMP8]], %[[BB21]] ]
+; CHECK-NEXT:    [[TMP3:%.*]] = phi i64 [ poison, %[[VECTOR_BODY]] ], [ [[TMP7]], %[[BB21]] ]
+; CHECK-NEXT:    [[TMP9:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[BB21]] ]
 ; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP3]], i64 0
 ; CHECK-NEXT:    [[BROADCAST_SPLAT:%.*]] = shufflevector <4 x i64> [[BROADCAST_SPLATINSERT]], <4 x i64> poison, <4 x i32> zeroinitializer
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, <4 x i64> [[BROADCAST_SPLAT]], <4 x i64> [[TMP2]]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP9]], <4 x i64> [[BROADCAST_SPLAT]], <4 x i64> [[TMP2]]
 ; CHECK-NEXT:    [[TMP4:%.*]] = add <4 x i64> [[PREDPHI]], splat (i64 3)
 ; CHECK-NEXT:    [[TMP5:%.*]] = add <4 x i64> [[VEC_IND]], splat (i64 4)
 ; CHECK-NEXT:    [[PREDPHI1:%.*]] = select <4 x i1> [[TMP1]], <4 x i64> [[TMP5]], <4 x i64> [[TMP4]]
@@ -650,8 +651,8 @@ define void @uniform_branch_after_varying_branch(ptr %a, i1 %u1) {
 ; CHECK-NEXT:    store i64 [[TMP6]], ptr [[A]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
 ; CHECK-NEXT:    [[VEC_IND_NEXT]] = add nuw nsw <4 x i64> [[VEC_IND]], splat (i64 4)
-; CHECK-NEXT:    [[TMP7:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
-; CHECK-NEXT:    br i1 [[TMP7]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP10:![0-9]+]]
+; CHECK-NEXT:    [[TMP8:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
+; CHECK-NEXT:    br i1 [[TMP8]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP10:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[EXIT]]:
@@ -799,10 +800,11 @@ define void @uniform_branch_after_varying_branch_more_blocks(ptr %a, i1 %u1) {
 ; CHECK-NEXT:    br label %[[BB43]]
 ; CHECK:       [[BB43]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = phi i64 [ [[TMP7]], %[[BB21]] ], [ poison, %[[BB32]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ poison, %[[BB21]] ], [ [[TMP2]], %[[BB32]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i64 [[TMP9]], i64 [[TMP3]]
-; CHECK-NEXT:    [[TMP10:%.*]] = add i64 [[PREDPHI]], 4
-; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP10]], i64 0
+; CHECK-NEXT:    [[TMP8:%.*]] = phi i64 [ poison, %[[BB21]] ], [ [[TMP2]], %[[BB32]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i1 [ false, %[[BB21]] ], [ true, %[[BB32]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP10]], i64 [[TMP8]], i64 [[TMP3]]
+; CHECK-NEXT:    [[TMP11:%.*]] = add i64 [[PREDPHI]], 4
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP11]], i64 0
 ; CHECK-NEXT:    [[TMP4:%.*]] = shufflevector <4 x i64> [[BROADCAST_SPLATINSERT]], <4 x i64> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    [[TMP5:%.*]] = add <4 x i64> [[VEC_IND]], splat (i64 5)
 ; CHECK-NEXT:    [[PREDPHI1:%.*]] = select <4 x i1> [[TMP1]], <4 x i64> [[TMP5]], <4 x i64> [[TMP4]]
@@ -810,8 +812,8 @@ define void @uniform_branch_after_varying_branch_more_blocks(ptr %a, i1 %u1) {
 ; CHECK-NEXT:    store i64 [[TMP6]], ptr [[A]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
 ; CHECK-NEXT:    [[VEC_IND_NEXT]] = add nuw nsw <4 x i64> [[VEC_IND]], splat (i64 4)
-; CHECK-NEXT:    [[TMP8:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
-; CHECK-NEXT:    br i1 [[TMP8]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP12:![0-9]+]]
+; CHECK-NEXT:    [[TMP9:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
+; CHECK-NEXT:    br i1 [[TMP9]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP12:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[EXIT]]:
@@ -965,25 +967,26 @@ define void @uniform_branch_after_varying_branch_more_blocks_mirrored(ptr %a, i1
 ; CHECK-NEXT:    [[TMP2:%.*]] = add <4 x i64> [[VEC_IND]], splat (i64 1)
 ; CHECK-NEXT:    br i1 [[U2]], label %[[BB42:.*]], label %[[BB31:.*]]
 ; CHECK:       [[BB31]]:
-; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[INDEX]], 3
+; CHECK-NEXT:    [[TMP8:%.*]] = add i64 [[INDEX]], 3
 ; CHECK-NEXT:    br label %[[BB53]]
 ; CHECK:       [[BB42]]:
 ; CHECK-NEXT:    [[TMP3:%.*]] = add i64 [[INDEX]], 4
 ; CHECK-NEXT:    br label %[[BB53]]
 ; CHECK:       [[BB53]]:
-; CHECK-NEXT:    [[TMP4:%.*]] = phi i64 [ [[TMP7]], %[[BB31]] ], [ poison, %[[BB42]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = phi i64 [ poison, %[[BB31]] ], [ [[TMP3]], %[[BB42]] ]
-; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 true, i64 [[TMP9]], i64 [[TMP4]]
-; CHECK-NEXT:    [[TMP10:%.*]] = add i64 [[PREDPHI]], 5
-; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP10]], i64 0
+; CHECK-NEXT:    [[TMP4:%.*]] = phi i64 [ [[TMP8]], %[[BB31]] ], [ poison, %[[BB42]] ]
+; CHECK-NEXT:    [[TMP10:%.*]] = phi i64 [ poison, %[[BB31]] ], [ [[TMP3]], %[[BB42]] ]
+; CHECK-NEXT:    [[TMP11:%.*]] = phi i1 [ false, %[[BB31]] ], [ true, %[[BB42]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP11]], i64 [[TMP10]], i64 [[TMP4]]
+; CHECK-NEXT:    [[TMP7:%.*]] = add i64 [[PREDPHI]], 5
+; CHECK-NEXT:    [[BROADCAST_SPLATINSERT:%.*]] = insertelement <4 x i64> poison, i64 [[TMP7]], i64 0
 ; CHECK-NEXT:    [[TMP5:%.*]] = shufflevector <4 x i64> [[BROADCAST_SPLATINSERT]], <4 x i64> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    [[PREDPHI1:%.*]] = select <4 x i1> [[TMP1]], <4 x i64> [[TMP5]], <4 x i64> [[TMP2]]
 ; CHECK-NEXT:    [[TMP6:%.*]] = extractelement <4 x i64> [[PREDPHI1]], i64 3
 ; CHECK-NEXT:    store i64 [[TMP6]], ptr [[A]], align 4
 ; CHECK-NEXT:    [[INDEX_NEXT]] = add nuw i64 [[INDEX]], 4
 ; CHECK-NEXT:    [[VEC_IND_NEXT]] = add nuw nsw <4 x i64> [[VEC_IND]], splat (i64 4)
-; CHECK-NEXT:    [[TMP8:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
-; CHECK-NEXT:    br i1 [[TMP8]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP14:![0-9]+]]
+; CHECK-NEXT:    [[TMP9:%.*]] = icmp eq i64 [[INDEX_NEXT]], 128
+; CHECK-NEXT:    br i1 [[TMP9]], label %[[MIDDLE_BLOCK:.*]], label %[[VECTOR_BODY]], !llvm.loop [[LOOP14:![0-9]+]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
 ; CHECK-NEXT:    br label %[[EXIT:.*]]
 ; CHECK:       [[EXIT]]:

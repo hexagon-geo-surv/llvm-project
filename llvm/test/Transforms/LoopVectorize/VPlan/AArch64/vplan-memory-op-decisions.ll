@@ -748,19 +748,19 @@ define void @blend_with_identical_incoming_values_address(ptr noalias %A, i1 %c)
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    vector.body:
 ; CHECK-NEXT:      ir<%iv> = WIDEN-INDUCTION nuw nsw ir<0>, ir<1>, vp<[[VP0]]>
-; CHECK-NEXT:    Successor(s): else
-; CHECK-EMPTY:
-; CHECK-NEXT:    else:
-; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = not ir<%c>
-; CHECK-NEXT:      EMIT ir<%idx.else> = add nsw ir<%iv>, ir<-1>, vp<[[VP4]]>
-; CHECK-NEXT:    Successor(s): then
+; CHECK-NEXT:      EMIT branch-on-cond ir<%c>
+; CHECK-NEXT:    Successor(s): then, else
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    then:
-; CHECK-NEXT:      EMIT ir<%idx.then> = add nsw ir<%iv>, ir<-1>, ir<%c>
+; CHECK-NEXT:      EMIT ir<%idx.then> = add nsw ir<%iv>, ir<-1>
 ; CHECK-NEXT:    Successor(s): latch
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    latch:
-; CHECK-NEXT:      BLEND ir<%idx> = ir<%idx.else>/vp<[[VP4]]> ir<%idx.then>/ir<%c>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<%idx.else>, else ], [ ir<poison>, then ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<true>, else ], [ ir<false>, then ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, else ], [ ir<%idx.then>, then ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<false>, else ], [ ir<true>, then ]
+; CHECK-NEXT:      BLEND ir<%idx> = vp<%4>/vp<[[VP5]]> vp<%6>/vp<[[VP7]]>
 ; CHECK-NEXT:      EMIT ir<%gep> = getelementptr inbounds ir<%A>, ir<%idx>
 ; CHECK-NEXT:      EMIT-SCALAR ir<%lv> = load ir<%gep>
 ; CHECK-NEXT:      EMIT ir<%add> = add ir<%lv>, ir<1>
@@ -770,6 +770,10 @@ define void @blend_with_identical_incoming_values_address(ptr noalias %A, i1 %c)
 ; CHECK-NEXT:      EMIT vp<%index.next> = add nuw vp<[[VP3]]>, vp<[[VP1]]>
 ; CHECK-NEXT:      EMIT branch-on-count vp<%index.next>, vp<[[VP2]]>
 ; CHECK-NEXT:    No successors
+; CHECK-EMPTY:
+; CHECK-NEXT:    else:
+; CHECK-NEXT:      EMIT ir<%idx.else> = add nsw ir<%iv>, ir<-1>
+; CHECK-NEXT:    Successor(s): latch
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block
 ; CHECK-EMPTY:
@@ -991,29 +995,33 @@ define void @blend_with_different_incoming_values_address(ptr noalias %A, ptr no
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    vector.body:
 ; CHECK-NEXT:      ir<%iv> = WIDEN-INDUCTION nuw nsw ir<0>, ir<1>, vp<[[VP0]]>
-; CHECK-NEXT:    Successor(s): else
-; CHECK-EMPTY:
-; CHECK-NEXT:    else:
-; CHECK-NEXT:      EMIT vp<[[VP4:%[0-9]+]]> = not ir<%c>
-; CHECK-NEXT:      EMIT ir<%idx.else> = add nsw ir<%iv>, ir<-2>, vp<[[VP4]]>
-; CHECK-NEXT:    Successor(s): then
+; CHECK-NEXT:      EMIT branch-on-cond ir<%c>
+; CHECK-NEXT:    Successor(s): then, else
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    then:
-; CHECK-NEXT:      EMIT ir<%idx.then> = add nsw ir<%iv>, ir<-1>, ir<%c>
+; CHECK-NEXT:      EMIT ir<%idx.then> = add nsw ir<%iv>, ir<-1>
 ; CHECK-NEXT:    Successor(s): latch
 ; CHECK-EMPTY:
 ; CHECK-NEXT:    latch:
-; CHECK-NEXT:      BLEND ir<%idx> = ir<%idx.else>/vp<[[VP4]]> ir<%idx.then>/ir<%c>
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP4:%[0-9]+]]> = phi [ ir<%idx.else>, else ], [ ir<poison>, then ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP5:%[0-9]+]]> = phi [ ir<true>, else ], [ ir<false>, then ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP6:%[0-9]+]]> = phi [ ir<poison>, else ], [ ir<%idx.then>, then ]
+; CHECK-NEXT:      EMIT-SCALAR vp<[[VP7:%[0-9]+]]> = phi [ ir<false>, else ], [ ir<true>, then ]
+; CHECK-NEXT:      BLEND ir<%idx> = vp<%4>/vp<[[VP5]]> vp<%6>/vp<[[VP7]]>
 ; CHECK-NEXT:      EMIT ir<%gep.B> = getelementptr inbounds ir<%B>, ir<%idx>
 ; CHECK-NEXT:      EMIT-SCALAR ir<%lv> = load ir<%gep.B>
 ; CHECK-NEXT:      EMIT ir<%gep.A> = getelementptr inbounds ir<%A>, ir<%iv>
-; CHECK-NEXT:      vp<[[VP5:%[0-9]+]]> = vector-pointer inbounds i32, ir<%gep.A>, ir<1>
-; CHECK-NEXT:      WIDEN store vp<[[VP5]]>, ir<%lv>
+; CHECK-NEXT:      vp<[[VP8:%[0-9]+]]> = vector-pointer inbounds i32, ir<%gep.A>, ir<1>
+; CHECK-NEXT:      WIDEN store vp<[[VP8]]>, ir<%lv>
 ; CHECK-NEXT:      EMIT ir<%iv.next> = add nuw nsw ir<%iv>, ir<1>
 ; CHECK-NEXT:      EMIT ir<%ec> = icmp eq ir<%iv>, ir<100>
 ; CHECK-NEXT:      EMIT vp<%index.next> = add nuw vp<[[VP3]]>, vp<[[VP1]]>
 ; CHECK-NEXT:      EMIT branch-on-count vp<%index.next>, vp<[[VP2]]>
 ; CHECK-NEXT:    No successors
+; CHECK-EMPTY:
+; CHECK-NEXT:    else:
+; CHECK-NEXT:      EMIT ir<%idx.else> = add nsw ir<%iv>, ir<-2>
+; CHECK-NEXT:    Successor(s): latch
 ; CHECK-NEXT:  }
 ; CHECK-NEXT:  Successor(s): middle.block
 ; CHECK-EMPTY:

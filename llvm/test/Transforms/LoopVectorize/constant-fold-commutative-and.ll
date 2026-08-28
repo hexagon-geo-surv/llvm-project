@@ -24,9 +24,10 @@ define void @constant_fold_commutative_and(ptr %ptr.n, ptr noalias %p, i1 %cond)
 ; CHECK-NEXT:    [[TMP4:%.*]] = icmp ult i64 [[TMP2]], 7
 ; CHECK-NEXT:    br label %[[LATCH2]]
 ; CHECK:       [[LATCH2]]:
-; CHECK-NEXT:    [[TMP5:%.*]] = phi i1 [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_11]] ]
+; CHECK-NEXT:    [[TMP5:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[PRED_11]] ]
+; CHECK-NEXT:    [[TMP12:%.*]] = phi i1 [ poison, %[[VECTOR_BODY]] ], [ [[TMP4]], %[[PRED_11]] ]
 ; CHECK-NEXT:    [[TMP7:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ [[TMP3]], %[[PRED_11]] ]
-; CHECK-NEXT:    [[TMP9:%.*]] = select i1 [[TMP7]], i1 [[TMP5]], i1 true
+; CHECK-NEXT:    [[TMP9:%.*]] = select i1 [[TMP7]], i1 [[TMP12]], i1 [[TMP5]]
 ; CHECK-NEXT:    br i1 [[TMP6]], label %[[PRED_STORE_IF:.*]], label %[[PRED_STORE_CONTINUE:.*]]
 ; CHECK:       [[PRED_STORE_IF]]:
 ; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr i8, ptr [[P]], i64 [[INDEX]]

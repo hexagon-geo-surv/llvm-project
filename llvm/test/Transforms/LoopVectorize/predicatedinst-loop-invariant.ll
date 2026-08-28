@@ -238,24 +238,26 @@ define void @test_store_to_invariant_address_needs_mask_due_to_low_trip_count(pt
 ; CHECK:       [[VECTOR_BODY]]:
 ; CHECK-NEXT:    br label %[[MIDDLE_BLOCK:.*]]
 ; CHECK:       [[MIDDLE_BLOCK]]:
+; CHECK-NEXT:    [[TMP0:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ]
+; CHECK-NEXT:    [[PREDPHI:%.*]] = select i1 [[TMP0]], i32 0, i32 1
 ; CHECK-NEXT:    br i1 true, label %[[PRED_STORE_IF:.*]], label %[[EXIT:.*]]
 ; CHECK:       [[PRED_STORE_IF]]:
-; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    store i32 [[PREDPHI]], ptr [[DST]], align 4
 ; CHECK-NEXT:    br label %[[EXIT]]
 ; CHECK:       [[EXIT]]:
 ; CHECK-NEXT:    br i1 true, label %[[PRED_STORE_IF2:.*]], label %[[PRED_STORE_CONTINUE3:.*]]
 ; CHECK:       [[PRED_STORE_IF2]]:
-; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    store i32 [[PREDPHI]], ptr [[DST]], align 4
 ; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE3]]
 ; CHECK:       [[PRED_STORE_CONTINUE3]]:
 ; CHECK-NEXT:    br i1 true, label %[[PRED_STORE_IF4:.*]], label %[[PRED_STORE_CONTINUE5:.*]]
 ; CHECK:       [[PRED_STORE_IF4]]:
-; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    store i32 [[PREDPHI]], ptr [[DST]], align 4
 ; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE5]]
 ; CHECK:       [[PRED_STORE_CONTINUE5]]:
 ; CHECK-NEXT:    br i1 false, label %[[PRED_STORE_IF6:.*]], label %[[PRED_STORE_CONTINUE7:.*]]
 ; CHECK:       [[PRED_STORE_IF6]]:
-; CHECK-NEXT:    store i32 0, ptr [[DST]], align 4
+; CHECK-NEXT:    store i32 [[PREDPHI]], ptr [[DST]], align 4
 ; CHECK-NEXT:    br label %[[PRED_STORE_CONTINUE7]]
 ; CHECK:       [[PRED_STORE_CONTINUE7]]:
 ; CHECK-NEXT:    br label %[[MIDDLE_BLOCK1:.*]]

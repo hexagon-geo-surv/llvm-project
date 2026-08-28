@@ -36,16 +36,17 @@ define void @test(i64 %n, ptr noalias %src0, ptr noalias %src1, ptr noalias %src
 ; IF-EVL-NEXT:    [[TMP9:%.*]] = extractelement <vscale x 4 x i32> [[PREDPHI8]], i64 0
 ; IF-EVL-NEXT:    br i1 [[C3]], label %[[LOAD_V25:.*]], label %[[LATCH7]]
 ; IF-EVL:       [[LOAD_V25]]:
-; IF-EVL-NEXT:    [[TMP14:%.*]] = getelementptr inbounds i32, ptr [[SRC2]], i64 [[EVL_BASED_IV]]
-; IF-EVL-NEXT:    [[VP_OP_LOAD6:%.*]] = call <vscale x 4 x i32> @llvm.vp.load.nxv4i32.p0(ptr align 4 [[TMP14]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP7]])
-; IF-EVL-NEXT:    [[TMP15:%.*]] = extractelement <vscale x 4 x i32> [[VP_OP_LOAD6]], i64 0
-; IF-EVL-NEXT:    [[TMP16:%.*]] = add i32 [[TMP15]], [[TMP9]]
+; IF-EVL-NEXT:    [[TMP15:%.*]] = getelementptr inbounds i32, ptr [[SRC2]], i64 [[EVL_BASED_IV]]
+; IF-EVL-NEXT:    [[VP_OP_LOAD6:%.*]] = call <vscale x 4 x i32> @llvm.vp.load.nxv4i32.p0(ptr align 4 [[TMP15]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP7]])
+; IF-EVL-NEXT:    [[TMP16:%.*]] = extractelement <vscale x 4 x i32> [[VP_OP_LOAD6]], i64 0
+; IF-EVL-NEXT:    [[TMP17:%.*]] = add i32 [[TMP16]], [[TMP9]]
 ; IF-EVL-NEXT:    br label %[[LATCH7]]
 ; IF-EVL:       [[LATCH7]]:
-; IF-EVL-NEXT:    [[TMP13:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP16]], %[[LOAD_V25]] ]
+; IF-EVL-NEXT:    [[TMP13:%.*]] = phi i32 [ poison, %[[VECTOR_BODY]] ], [ [[TMP17]], %[[LOAD_V25]] ]
+; IF-EVL-NEXT:    [[TMP14:%.*]] = phi i1 [ false, %[[VECTOR_BODY]] ], [ true, %[[LOAD_V25]] ]
 ; IF-EVL-NEXT:    [[BROADCAST_SPLATINSERT8:%.*]] = insertelement <vscale x 4 x i32> poison, i32 [[TMP13]], i64 0
 ; IF-EVL-NEXT:    [[BROADCAST_SPLAT9:%.*]] = shufflevector <vscale x 4 x i32> [[BROADCAST_SPLATINSERT8]], <vscale x 4 x i32> poison, <vscale x 4 x i32> zeroinitializer
-; IF-EVL-NEXT:    [[PREDPHI9:%.*]] = select i1 true, <vscale x 4 x i32> [[BROADCAST_SPLAT9]], <vscale x 4 x i32> [[PREDPHI8]]
+; IF-EVL-NEXT:    [[PREDPHI9:%.*]] = select i1 [[TMP14]], <vscale x 4 x i32> [[BROADCAST_SPLAT9]], <vscale x 4 x i32> [[PREDPHI8]]
 ; IF-EVL-NEXT:    [[TMP20:%.*]] = getelementptr inbounds i32, ptr [[DST]], i64 [[EVL_BASED_IV]]
 ; IF-EVL-NEXT:    call void @llvm.vp.store.nxv4i32.p0(<vscale x 4 x i32> [[PREDPHI9]], ptr align 4 [[TMP20]], <vscale x 4 x i1> splat (i1 true), i32 [[TMP7]])
 ; IF-EVL-NEXT:    [[TMP21:%.*]] = zext i32 [[TMP7]] to i64

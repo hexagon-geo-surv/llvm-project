@@ -15,6 +15,7 @@
 #include "VPlan.h"
 #include "VPlanCFG.h"
 #include "VPlanDominatorTree.h"
+#include "VPlanHelpers.h"
 #include "VPlanPatternMatch.h"
 #include "VPlanTransforms.h"
 #include "VPlanUtils.h"
@@ -575,8 +576,35 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
     auto &BlockBlendTerms = BlendTerms[BlocksInCompactRPOTOrder.getIndex(VPBB)];
     auto Terms = BlockBlendTerms.find(PhiR);
     assert(Terms != BlockBlendTerms.end() && "Missing cached blend terms");
-    for (auto [_, ConstMaskBlock] : Terms->second)
-      MaskBlocks.push_back(const_cast<VPBasicBlock *>(ConstMaskBlock));
+    for (auto [_, MaskBlock] : Terms->second)
+      MaskBlocks.push_back(MaskBlock);
+
+    LLVM_DEBUG({
+      VPSlotTracker SlotTracker(&Plan);
+      auto PrintValue = [&](VPValue *V) {
+        if (V)
+          V->printAsOperand(dbgs(), SlotTracker);
+        else
+          dbgs() << "<none>";
+      };
+      dbgs() << "  blend input terms:\n";
+      for (auto [V, IncomingBlock] : PhiR->incoming_values_and_blocks()) {
+        auto *IncomingBB = cast<VPBasicBlock>(IncomingBlock);
+        dbgs() << "    " << IncomingBB->getName() << ": value ";
+        PrintValue(V);
+        dbgs() << ", in-mask ";
+        PrintValue(getBlockInMask(IncomingBB));
+        dbgs() << "\n";
+      }
+      dbgs() << "  selected blend terms:\n";
+      for (auto [V, MaskBlock] : Terms->second) {
+        dbgs() << "    " << MaskBlock->getName() << ": value ";
+        PrintValue(V);
+        dbgs() << ", in-mask ";
+        PrintValue(getBlockInMask(MaskBlock));
+        dbgs() << "\n";
+      }
+    });
 
     // The in-mask of the common dominator is true on all paths from an
     // incoming block to the phi. Remove it before reconstructing the masks,
@@ -585,28 +613,68 @@ void VPPredicator::convertPhisToBlends(VPBasicBlock *VPBB) {
         cast<VPBasicBlock>(VPDT.findNearestCommonDominator(
             make_range(MaskBlocks.begin(), MaskBlocks.end())));
     VPValue *CommonIncomingMask = getBlockInMask(CommonIncomingDom);
+    LLVM_DEBUG({
+      VPSlotTracker SlotTracker(&Plan);
+      dbgs() << "  common incoming dominator " << CommonIncomingDom->getName()
+             << ", in-mask ";
+      if (CommonIncomingMask)
+        CommonIncomingMask->printAsOperand(dbgs(), SlotTracker);
+      else
+        dbgs() << "<none>";
+      dbgs() << "\n";
+    });
 
-    for (auto [V, ConstMaskBlock] : Terms->second) {
-      auto *MaskBlock = const_cast<VPBasicBlock *>(ConstMaskBlock);
+    for (auto [V, MaskBlock] : Terms->second) {
+      VPValue *OriginalV = V;
+      VPValue *Mask = getBlockInMask(MaskBlock);
 
       // Reconstruct values at the blend location rather than fixing up the
       // blend after it has been created.
-      V = reconstructSSA(VPBB, V, /*IsMask=*/false);
+      V = reconstructSSA(VPBB, OriginalV, /*IsMask=*/false);
 
-      VPValue *Mask = getBlockInMask(MaskBlock);
       VPValue *RemainingMask = nullptr;
       bool RemovedCommonMask =
           CommonIncomingMask && Mask &&
           match(Mask, m_RemoveMask(CommonIncomingMask, RemainingMask));
-      OperandsWithMask.append(
-          {V, RemovedCommonMask && !RemainingMask
-                  ? Plan.getTrue()
-                  : reconstructBlendMask(VPBB, MaskBlock,
-                                         RemovedCommonMask ? RemainingMask
-                                                           : Mask)});
+      if (RemovedCommonMask) {
+        Mask = RemainingMask ? RemainingMask : Plan.getTrue();
+      }
+
+      VPValue *BlendMask = reconstructBlendMask(VPBB, MaskBlock, Mask);
+      LLVM_DEBUG({
+        VPSlotTracker SlotTracker(&Plan);
+        auto PrintValue = [&](VPValue *VPV) {
+          if (VPV)
+            VPV->printAsOperand(dbgs(), SlotTracker);
+          else
+            dbgs() << "<none>";
+        };
+        dbgs() << "  blend term from " << MaskBlock->getName() << ": value ";
+        PrintValue(OriginalV);
+        dbgs() << " -> ";
+        PrintValue(V);
+        dbgs() << ", mask ";
+        PrintValue(Mask);
+        if (RemovedCommonMask) {
+          dbgs() << " -> ";
+          PrintValue(RemainingMask ? RemainingMask : Plan.getTrue());
+          dbgs() << " after removing the common in-mask";
+        }
+        dbgs() << " -> ";
+        PrintValue(BlendMask);
+        dbgs() << " at " << VPBB->getName() << "\n";
+      });
+      OperandsWithMask.append({V, BlendMask});
     }
 
     PHINode *IRPhi = cast_or_null<PHINode>(PhiR->getUnderlyingValue());
+    LLVM_DEBUG({
+      dbgs() << "  creating blend with " << Terms->second.size() << " term(s)";
+      if (Terms->second.size() != PhiR->getNumIncoming())
+        dbgs() << " after coalescing " << PhiR->getNumIncoming()
+               << " incoming value(s)";
+      dbgs() << "\n";
+    });
     auto *Blend =
         new VPBlendRecipe(IRPhi, OperandsWithMask, *PhiR, PhiR->getDebugLoc());
     Builder.insert(Blend);
