@@ -3082,10 +3082,10 @@ add_fp_unittest(
   HDRS
     FMaximumMagTest.h
   DEPENDS
-    libc.src.__support.FPUtil.float128
     libc.src.math.fmaximum_magf128
     libc.src.__support.CPP.algorithm
     libc.src.__support.FPUtil.basic_operations
+    libc.src.__support.FPUtil.float128
     libc.src.__support.FPUtil.fp_bits
 )
 
@@ -3513,9 +3513,9 @@ add_fp_unittest(
   HDRS
     FMinimumMagNumTest.h
   DEPENDS
-    libc.src.__support.FPUtil.float128
     libc.src.math.fminimum_mag_numf128
     libc.src.__support.CPP.algorithm
+    libc.src.__support.FPUtil.float128
     libc.src.__support.FPUtil.fp_bits
 )
 
