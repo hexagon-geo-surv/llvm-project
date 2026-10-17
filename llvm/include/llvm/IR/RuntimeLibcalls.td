@@ -1391,17 +1391,22 @@ foreach lc = LibCalls__sync in {
   def __#!tolower(!cast<string>(lc)) : RuntimeLibcallImpl<lc>;
 }
 
-// Atomic `__atomic_*' libcalls.
-foreach lc = LibCalls__atomic in {
-  def __#!tolower(!cast<string>(lc)) : RuntimeLibcallImpl<lc>;
-}
-
 // Deoptimization
 def __llvm_deoptimize : RuntimeLibcallImpl<DEOPTIMIZE>;
 
 // Clear cache
 def __clear_cache : RuntimeLibcallImpl<CLEAR_CACHE>;
 } // End defset CompilerRtLibgccImpls
+
+// libatomic
+//--------------------------------------------------------------------
+
+// Atomic `__atomic_*' libcalls.
+defset list<RuntimeLibcallImpl> LibatomicImpls = {
+  foreach lc = LibCalls__atomic in {
+    def __#!tolower(!cast<string>(lc)) : RuntimeLibcallImpl<lc>;
+  }
+}
 
 //--------------------------------------------------------------------
 // libm
@@ -2214,6 +2219,9 @@ def CompilerRtLibgcc : LibcallLibrary<"compiler-rt",
        LibcallImpls<(add CompilerRtLibgccImpls_ppcf128), isLongDoublePPCF128>,
        LibcallImpls<(add Int128RTLibcalls), isArch64Bit>)>;
 
+// The `__atomic_*' runtime: GCC's libatomic, or compiler-rt's clang_rt.atomic.
+def Libatomic : LibcallLibrary<"libatomic", (add LibatomicImpls)>;
+
 def Libc : LibcallLibrary<"libc", (add LibcCoreImpls)>;
 
 // PPC and SPARC provide their own stack protector, and XCore has none.
@@ -2356,7 +2364,7 @@ def AArch64OutlineAtomics : LibcallLibrary<"compiler-rt",
   isAArch64_ExceptArm64EC>;
 
 def AArch64SystemLibrary : SystemRuntimeLibrary<isAArch64_ExceptArm64EC,
-  ["compiler-rt", "libm", "libc", "unwind", "sme"]>;
+  ["compiler-rt", "libatomic", "libm", "libc", "unwind", "sme"]>;
 
 // The Windows runtime lacks the f32 and f64 powi helpers, and frexpf/ldexpf.
 defvar Arm64ECCompilerRtImpls =
@@ -2372,6 +2380,12 @@ defset list<RuntimeLibcallImpl> WinArm64ECDefaultRuntimeLibcallImpls = {
   }
 
   foreach libcall = AArch64LibcallImpls in {
+    def arm64ec_#libcall : DuplicateLibcallImplWithPrefix<libcall, "#">;
+  }
+}
+
+defset list<RuntimeLibcallImpl> WinArm64ECLibatomicImpls = {
+  foreach libcall = LibatomicImpls in {
     def arm64ec_#libcall : DuplicateLibcallImplWithPrefix<libcall, "#">;
   }
 }
@@ -2423,9 +2437,14 @@ def Arm64ECRuntime : LibcallLibrary<"compiler-rt",
   let Isolated = true;
 }
 
+def Arm64ECLibatomic : LibcallLibrary<"libatomic",
+  (add WinArm64ECLibatomicImpls), isWindowsArm64EC> {
+  let Isolated = true;
+}
+
 def WindowsARM64ECSystemLibrary
     : SystemRuntimeLibrary<isWindowsArm64EC,
-                           ["compiler-rt", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libc", "unwind"]>;
 
 //===----------------------------------------------------------------------===//
 // AMDGPU Runtime Libcalls
@@ -2910,7 +2929,7 @@ def ARMLibm : LibcallLibrary<"libm",
 
 def ARMSystemLibrary
     : SystemRuntimeLibrary<isARMOrThumb,
-      ["compiler-rt", "libm", "libc", "unwind"]> {
+      ["compiler-rt", "libatomic", "libm", "libc", "unwind"]> {
   let DefaultLibcallCallingConv = LibcallCallingConv<[{
      TT.isOSDarwin() ? CallingConv::C :
         (FloatABI == FloatABI::Hard ? CallingConv::ARM_AAPCS_VFP
@@ -2960,7 +2979,8 @@ defvar AVRCompilerRtOptOut = [
 defvar AVRLibmOptOut = [sin, cos, sinf, cosf, sincos, sincosf];
 
 def AVRSystemLibrary
-    : SystemRuntimeLibrary<isAVR, ["compiler-rt", "libm", "libc", "unwind"]>;
+    : SystemRuntimeLibrary<isAVR, ["compiler-rt", "libatomic", "libm",
+                                   "libc", "unwind"]>;
 
 def : LibraryExclusion<"compiler-rt", isAVR, AVRCompilerRtOptOut>;
 def : LibraryExclusion<"libm", isAVR, AVRLibmOptOut>;
@@ -3026,7 +3046,8 @@ def HexagonCompilerRt
 
 def HexagonSystemLibrary
     : SystemRuntimeLibrary<isHexagon,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 //===----------------------------------------------------------------------===//
 // Lanai Runtime Libcalls
@@ -3037,7 +3058,8 @@ def isLanai : RuntimeLibcallAvailability<(all_of IsLanai)>;
 // Use fast calling convention for library functions.
 def LanaiSystemLibrary
     : SystemRuntimeLibrary<isLanai,
-                           ["compiler-rt", "libm", "libc", "unwind"]> {
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]> {
   let DefaultLibcallCallingConv = FASTCC;
 }
 
@@ -3310,7 +3332,8 @@ def MSP430CompilerRt : LibcallLibrary<"compiler-rt", (add
 
 def MSP430SystemLibrary
     : SystemRuntimeLibrary<isMSP430,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 def : LibraryExclusion<"compiler-rt", isMSP430, MSP430DefaultOptOut>;
 def : LibraryExclusion<"libm", isMSP430, [sincos, sincosf]>;
@@ -3433,7 +3456,8 @@ defvar PPCReplacedCompilerRtF128 = [
     __powitf2_f128, __trunctfhf2_f128];
 
 def PPCSystemLibrary
-    : SystemRuntimeLibrary<isPPC, ["compiler-rt", "libc", "libm", "unwind"]>;
+    : SystemRuntimeLibrary<isPPC, ["compiler-rt", "libatomic", "libc",
+                                   "libm", "unwind"]>;
 
 def : LibraryExclusion<"compiler-rt", isPPC, PPCReplacedCompilerRtF128>;
 def : LibraryExclusion<"libc", isPPC, [memcpy]>;
@@ -3449,7 +3473,8 @@ def RISCVLibc : LibcallLibrary<"libc", (add __riscv_flush_icache), isRISCV>;
 
 def RISCVSystemLibrary
     : SystemRuntimeLibrary<isRISCV,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 //===----------------------------------------------------------------------===//
 // SPARC Runtime Libcalls
@@ -3523,7 +3548,8 @@ def SPARCStackProtectorLibc : LibcallLibrary<"libc",
 
 def SPARCSystemLibrary
     : SystemRuntimeLibrary<isSPARC,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 def : LibraryExclusion<"compiler-rt", isSPARC, SPARC64_MulDivCalls>;
 
@@ -3621,7 +3647,8 @@ def X86Libm : LibcallLibrary<"libm",
        LibcallImpls<(add frexpl_f128, ldexpl_f128), isLongDoubleF128>), isX86>;
 
 def X86SystemLibrary
-    : SystemRuntimeLibrary<isX86, ["compiler-rt", "libm", "libc", "unwind"]>;
+    : SystemRuntimeLibrary<isX86, ["compiler-rt", "libatomic", "libm",
+                                   "libc", "unwind"]>;
 
 def : LibraryExclusion<"compiler-rt", isX86,
   !listconcat(WindowsDivRemMulLibcallOverrides, [__powitf2_f128])>;
@@ -3647,7 +3674,8 @@ def XCoreLibm : LibcallLibrary<"libm",
 
 def XCoreSystemLibrary
     : SystemRuntimeLibrary<isXCore,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 def : LibraryExclusion<"libm", isXCore, [sincos, sincosf]>;
 
@@ -3769,7 +3797,8 @@ def ZOSLibc : LibcallLibrary<"libc", (add ZOSRuntimeLibcalls), isSystemZZOS>;
 
 def SystemZZOSSystemLibrary
     : SystemRuntimeLibrary<isSystemZZOS,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 //===----------------------------------------------------------------------===//
 // WebAssembly Runtime Libcalls
@@ -3800,7 +3829,8 @@ def WasmExceptionRuntime : LibcallLibrary<"unwind",
   (add _Unwind_GetWasmLPadContext), isWasm>;
 
 def WasmSystemLibrary
-    : SystemRuntimeLibrary<isWasm, ["compiler-rt", "libm", "libc", "unwind"]>;
+    : SystemRuntimeLibrary<isWasm, ["compiler-rt", "libatomic", "libm",
+                                    "libc", "unwind"]>;
 
 def : LibraryExclusion<"libm", isWasm, [sincos, sincosf, sincosl_f128]>;
 
@@ -3816,7 +3846,8 @@ def isDefaultLibcallArch : RuntimeLibcallAvailability<
 
 def LegacyDefaultSystemLibrary
     : SystemRuntimeLibrary<isDefaultLibcallArch,
-                           ["compiler-rt", "libm", "libc", "unwind"]>;
+                           ["compiler-rt", "libatomic", "libm",
+                            "libc", "unwind"]>;
 
 //===----------------------------------------------------------------------===//
 // Vector math libraries
