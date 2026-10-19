@@ -143,6 +143,8 @@ static std::pair<Type *, Attribute> convertToIRTypeAndAttr(FuncArgTypeID ID,
     return {Type::getVoidTy(Ctx), Attribute()};
   case Bool:
     return {IntegerType::get(Ctx, 1), Attribute::get(Ctx, Attribute::ZExt)};
+  case Int8:
+    return {IntegerType::get(Ctx, 8), Attribute()};
   case Int16:
   case UInt16:
     return {IntegerType::get(Ctx, 16), Attribute()};
@@ -163,6 +165,8 @@ static std::pair<Type *, Attribute> convertToIRTypeAndAttr(FuncArgTypeID ID,
   case LLong:
   case ULLong:
     return {IntegerType::get(Ctx, 64), Attribute()};
+  case Int128:
+    return {IntegerType::get(Ctx, 128), Attribute()};
   case SizeT:
   case SSizeT:
     return {getSizeTType(Ctx, DL), Attribute()};
