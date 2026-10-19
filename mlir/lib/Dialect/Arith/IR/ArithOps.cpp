@@ -2840,6 +2840,18 @@ public:
     // Number of bits representing values, as opposed to the sign
     auto valueBits = isUnsigned ? intWidth : (intWidth - 1);
 
+    // The reasoning below assumes that zero and signed inputs can be
+    // represented, and that conversion cannot produce NaN or saturate to a
+    // finite value. For formats without infinities, conservatively require the
+    // entire integer range to fit within the floating-point exponent range.
+    const llvm::fltSemantics &semantics = floatTy.getFloatSemantics();
+    if (!APFloat::semanticsHasZero(semantics) ||
+        (!isUnsigned && !APFloat::semanticsHasSignedRepr(semantics)))
+      return failure();
+    if (!APFloat::semanticsHasInf(semantics) &&
+        APFloat::semanticsMaxExponent(semantics) < (int)valueBits)
+      return failure();
+
     // Following test does NOT adjust intWidth downwards for signed inputs,
     // because the most negative value still requires all the mantissa bits
     // to distinguish it from one less than that value.
@@ -2865,11 +2877,13 @@ public:
     // Convert to equivalent cmpi predicate
     CmpIPredicate pred;
     switch (op.getPredicate()) {
+    case CmpFPredicate::AlwaysTrue:
     case CmpFPredicate::ORD:
       // Int to fp conversion doesn't create a nan (ord checks neither is a nan)
       rewriter.replaceOpWithNewOp<ConstantIntOp>(op, /*value=*/true,
                                                  /*width=*/1);
       return success();
+    case CmpFPredicate::AlwaysFalse:
     case CmpFPredicate::UNO:
       // Int to fp conversion doesn't create a nan (uno checks either is a nan)
       rewriter.replaceOpWithNewOp<ConstantIntOp>(op, /*value=*/false,
