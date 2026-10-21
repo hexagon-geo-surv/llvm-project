@@ -38,6 +38,16 @@ define <vscale x 4 x i32> @and_i32(<vscale x 4 x i1> %pg, <vscale x 4 x i32> %a)
   ret <vscale x 4 x i32> %out
 }
 
+define <vscale x 4 x i32> @and_i32_nested(<vscale x 4 x i1> %pg, <vscale x 4 x i32> %a) {
+; CHECK-LABEL: and_i32_nested:
+; CHECK:       // %bb.0:
+; CHECK-NEXT:    and z0.s, z0.s, #0xf
+; CHECK-NEXT:    ret
+  %inner = call <vscale x 4 x i32> @llvm.aarch64.sve.and.u.nxv4i32(<vscale x 4 x i1> %pg, <vscale x 4 x i32> %a, <vscale x 4 x i32> splat (i32 255))
+  %outer = call <vscale x 4 x i32> @llvm.aarch64.sve.and.u.nxv4i32(<vscale x 4 x i1> %pg, <vscale x 4 x i32> %inner, <vscale x 4 x i32> splat (i32 15))
+  ret <vscale x 4 x i32> %outer
+}
+
 define <vscale x 2 x i64> @and_i64(<vscale x 2 x i1> %pg, <vscale x 2 x i64> %a) {
 ; CHECK-LABEL: and_i64:
 ; CHECK:       // %bb.0:
