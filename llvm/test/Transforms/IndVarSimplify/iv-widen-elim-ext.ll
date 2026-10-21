@@ -206,11 +206,11 @@ for.end:                                          ; preds = %for.cond.for.end_cr
 
 declare i32 @dummy(ptr, ptr)
 
-; TODO: the zext can be eliminated.
-; %i.02 starts at 0 and increments with nsw.
-; There's the guard M >s 0, so %add3 = %i.02 + %M (nsw)
-; is non-negative on every iteration and so
-; zext(%add3) == sext(%add3) == wide add.
+; %add3 = %i.02 + %M is nsw, so its widened form is sext(%add3). Its user is
+; a zext, which equals the sext only if %add3 >=s 0. %add3 is {%M,+,1} with
+; nsw, and the guard 0 <s %M makes it non-negative on loop entry. It can only
+; grow, so it stays non-negative on every iteration, and the zext is
+; eliminated.
 define i32 @foo3(i32 %M) {
 ; CHECK-LABEL: @foo3(
 ; CHECK-NEXT:  entry:
@@ -228,9 +228,7 @@ define i32 @foo3(i32 %M) {
 ; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[ARRAYIDX2]], align 4
 ; CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP1]], [[TMP2]]
 ; CHECK-NEXT:    [[TMP3:%.*]] = add nsw i64 [[INDVARS_IV]], [[TMP0]]
-; CHECK-NEXT:    [[TMP4:%.*]] = trunc nsw i64 [[TMP3]] to i32
-; CHECK-NEXT:    [[IDXPROM4:%.*]] = zext i32 [[TMP4]] to i64
-; CHECK-NEXT:    [[ARRAYIDX5:%.*]] = getelementptr inbounds [100 x i32], ptr @a, i64 0, i64 [[IDXPROM4]]
+; CHECK-NEXT:    [[ARRAYIDX5:%.*]] = getelementptr inbounds [100 x i32], ptr @a, i64 0, i64 [[TMP3]]
 ; CHECK-NEXT:    store i32 [[ADD]], ptr [[ARRAYIDX5]], align 4
 ; CHECK-NEXT:    br label [[FOR_INC]]
 ; CHECK:       for.inc:
