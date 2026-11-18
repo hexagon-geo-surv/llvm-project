@@ -837,6 +837,14 @@ void OmpStructureChecker::Leave(const parser::OmpMetadirectiveDirective &x) {
           "The declarative form of the %s directive is not implemented yet and will be ignored"_warn_en_US,
           parser::omp::GetUpperName(dirName.v, version));
     }
+  } else if (InExecutionPart()) {
+    if (!hasDeclarative.empty()) {
+      context_
+          .Say(dirName.source,
+              "A %s in the execution part cannot have declarative variants"_err_en_US,
+              parser::omp::GetUpperName(dirName.v, version))
+          .Attach(hasDeclarative, "The declarative variant"_because_en_US);
+    }
   }
 
   ExitDirectiveNest(MetadirectiveNest);
